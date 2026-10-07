@@ -45,34 +45,34 @@
 ```mermaid
 flowchart TD
     subgraph Ingestion["1. Document Ingestion Subsystem"]
-        Doc[User Document\nPDF, DOCX, PPTX, XLSX, Images] --> Convert[Multi-Format Converter\nLibreOffice / PyMuPDF Engine]
-        Convert --> Parser[Layout-Aware Parser\nDocling / PyMuPDF Fitz]
-        Parser --> Chunker[Structure-Aware Chunker\n400 Tokens, 12% Overlap]
-        Chunker --> DenseEmbed[Dense Vector Embeddings\nBAAI/bge-small-en-v1.5 384d]
-        Chunker --> SparseIndex[Sparse Lexical Index\nOkapi BM25Plus JSON Cache]
-        DenseEmbed --> Qdrant[(Qdrant Vector Database\nCosine Similarity)]
-        SparseIndex --> BM25Disk[(Local BM25 Store\ndata/bm25/*.json)]
+        Doc["User Document<br/>PDF, DOCX, PPTX, XLSX, Images"] --> Convert["Multi-Format Converter<br/>LibreOffice / PyMuPDF Engine"]
+        Convert --> Parser["Layout-Aware Parser<br/>Docling / PyMuPDF Fitz"]
+        Parser --> Chunker["Structure-Aware Chunker<br/>400 Tokens, 12% Overlap"]
+        Chunker --> DenseEmbed["Dense Vector Embeddings<br/>BAAI/bge-small-en-v1.5 384d"]
+        Chunker --> SparseIndex["Sparse Lexical Index<br/>Okapi BM25Plus JSON Cache"]
+        DenseEmbed --> Qdrant[("Qdrant Vector Database<br/>Cosine Similarity")]
+        SparseIndex --> BM25Disk[("Local BM25 Store<br/>data/bm25/*.json")]
     end
 
     subgraph Retrieval["2. Hybrid Retrieval & Ranking Subsystem"]
-        Q[User Question] --> Router{Query Router\nRule Heuristic + LLM Classifier}
-        Router -- "Document Scope" --> Rewrite[Query Transformation\nMulti-Query Expansion & Pronoun Resolver]
-        Router -- "General Scope" --> GeneralAnswer[Direct Chat Generation\nBadge: 'General Knowledge']
-        Router -- "Real-Time Query" --> WebSearch[Live Web Fallback\nYahoo Finance / DDG / Wiki]
+        Q["User Question"] --> Router{"Query Router<br/>Rule Heuristic + LLM Classifier"}
+        Router -->|"Document Scope"| Rewrite["Query Transformation<br/>Multi-Query Expansion & Pronoun Resolver"]
+        Router -->|"General Scope"| GeneralAnswer["Direct Chat Generation<br/>Badge: General Knowledge"]
+        Router -->|"Real-Time Query"| WebSearch["Live Web Fallback<br/>Yahoo Finance / DDG / Wiki"]
 
-        Rewrite --> ParFetch["Parallel Candidate Retrieval\nTop 30 Vector + Top 30 BM25"]
-        ParFetch --> Fusion["Hybrid Rank Fusion\nReciprocal Rank Fusion k=60"]
-        Fusion --> Dedup["Near-Duplicate Dedup\nChunk ID + 3-Gram Jaccard >= 0.88"]
-        Dedup --> Reranker["Cross-Encoder Reranker\nBAAI/bge-reranker-base"]
-        Reranker --> TopFilter["Relevance Filtering\nTop-5 Passages, Score >= 0.25"]
+        Rewrite --> ParFetch["Parallel Candidate Retrieval<br/>Top 30 Vector + Top 30 BM25"]
+        ParFetch --> Fusion["Hybrid Rank Fusion<br/>Reciprocal Rank Fusion k=60"]
+        Fusion --> Dedup["Near-Duplicate Dedup<br/>Chunk ID + 3-Gram Jaccard >= 0.88"]
+        Dedup --> Reranker["Cross-Encoder Reranker<br/>BAAI/bge-reranker-base"]
+        Reranker --> TopFilter["Relevance Filtering<br/>Top-5 Passages, Score >= 0.25"]
     end
 
     subgraph Generation["3. Grounded Generation & UI Visualization"]
-        TopFilter --> PromptBuilder[Budgeted Prompt Builder\nStrict Markdown Citations [1], [2]]
-        PromptBuilder --> LLMEngine[Ollama LLM Engine\nqwen2.5:1.5b @ temp=0.1]
-        LLMEngine --> SSEStream[Server-Sent Events Stream\nTokens + Provenance Bounding Boxes]
-        SSEStream --> ReactUI[3-Panel Interface\nSidebar | Live Chat | PDF Viewer]
-        ReactUI --> CanvasHighlight[PDF.js Canvas Highlighting\nAuto-Scroll to Page & Draw BBox Overlay]
+        TopFilter --> PromptBuilder["Budgeted Prompt Builder<br/>Strict Grounded Citations"]
+        PromptBuilder --> LLMEngine["Ollama LLM Engine<br/>qwen2.5:1.5b @ temp=0.1"]
+        LLMEngine --> SSEStream["Server-Sent Events Stream<br/>Tokens + Provenance Bounding Boxes"]
+        SSEStream --> ReactUI["3-Panel Interface<br/>Sidebar | Live Chat | PDF Viewer"]
+        ReactUI --> CanvasHighlight["PDF.js Canvas Highlighting<br/>Auto-Scroll to Page & Draw BBox Overlay"]
     end
 ```
 
