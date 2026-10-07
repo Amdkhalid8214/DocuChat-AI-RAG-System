@@ -1,0 +1,2 @@
+include:
+  - path: ./RAG-Based-ChatBot-Main/docker-compose.yml

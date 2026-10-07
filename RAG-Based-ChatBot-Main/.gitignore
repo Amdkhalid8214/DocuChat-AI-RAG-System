@@ -1,0 +1,99 @@
+# ==============================================================================
+# Git Ignore - Comprehensive Security & Exclusion Configuration
+# ==============================================================================
+
+# 1. Virtual Environments (Python)
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+**/.venv/
+**/venv/
+**/env/
+
+# 2. API Keys, Secrets & Environment Variables (CRITICAL)
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+**/*.env
+# Keep .env.example tracked as safe template
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+secrets/
+credentials.json
+client_secret*.json
+
+# 3. Local Databases, State & Storage
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+backend/pdfchat.db
+backend/data/
+**/data/
+uploads/
+backend/uploads/
+**/uploads/
+**/qdrant_storage/
+**/bm25/
+**/converted/
+
+# 4. Node & Frontend (React / Web)
+node_modules/
+**/node_modules/
+frontend/node_modules/
+build/
+dist/
+frontend/build/
+**/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 5. Python Bytecode, Caches & Testing
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 6. Logs & Temp Files
+*.log
+logs/
+**/logs/
+tmp/
+temp/
+
+# 7. Operating System & IDEs
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

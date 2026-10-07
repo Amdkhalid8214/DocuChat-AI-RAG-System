@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DocuChat AI — End-to-End Deep Engineering & Architectural Reference Guide</title>
+<style>
+  @page {
+    size: A4;
+    margin: 12mm 12mm 14mm 12mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+
+  *, *:before, *:after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    background: #ffffff;
+    line-height: 1.5;
+    font-size: 9.5pt;
+    margin: 0;
+    padding: 0;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+  .avoid-break {
+    page-break-inside: avoid;
+  }
+
+  /* Cover Page */
+  .cover {
+    min-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 30px 10px 10px 10px;
+    page-break-after: always;
+  }
+
+  .cover-badge {
+    display: inline-block;
+    background: #ede9fe;
+    color: #6366f1;
+    font-weight: 700;
+    font-size: 8.5pt;
+    padding: 5px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: 1px solid #c7d2fe;
+    margin-bottom: 20px;
+  }
+
+  .cover-title {
+    font-size: 30pt;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #0f172a;
+    margin: 0 0 14px 0;
+  }
+
+  .cover-title span {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .cover-subtitle {
+    font-size: 12pt;
+    color: #475569;
+    font-weight: 400;
+    max-width: 680px;
+    line-height: 1.5;
+    margin-bottom: 25px;
+  }
+
+  .cover-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 25px 0;
+  }
+
+  .metric-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    border-left: 4px solid #6366f1;
+  }
+
+  .metric-num {
+    font-size: 16pt;
+    font-weight: 800;
+    color: #1e1b4b;
+    margin-bottom: 2px;
+  }
+
+  .metric-label {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .cover-footer {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8pt;
+    color: #64748b;
+  }
+
+  /* Headings */
+  h1 {
+    font-size: 15pt;
+    font-weight: 800;
+    color: #0f172a;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 20px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  h1 .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: #ede9fe;
+    color: #6366f1;
+    border-radius: 6px;
+    font-size: 10pt;
+    font-weight: 800;
+  }
+
+  h2 {
+    font-size: 11.5pt;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 14px;
+    margin-bottom: 8px;
+    border-left: 3px solid #6366f1;
+    padding-left: 8px;
+  }
+
+  h3 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #334155;
+    margin-top: 10px;
+    margin-bottom: 4px;
+  }
+
+  p {
+    margin: 0 0 8px 0;
+  }
+
+  /* Deep Step Breakdown Box */
+  .deep-step {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+
+  .deep-step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 6px;
+  }
+
+  .step-num {
+    background: #6366f1;
+    color: #ffffff;
+    font-size: 8pt;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 5px;
+  }
+
+  .step-name {
+    font-size: 10.5pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+  }
+
+  .step-tech {
+    font-size: 8pt;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: Consolas, monospace;
+    margin-left: auto;
+  }
+
+  .subfield {
+    margin-bottom: 8px;
+  }
+
+  .subfield-title {
+    font-size: 8.5pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .title-what { color: #2563eb; }
+  .title-lib { color: #7c3aed; }
+  .title-why { color: #b45309; }
+  .title-next { color: #059669; }
+
+  /* Callouts & Alert Boxes */
+  .callout {
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    font-size: 8.5pt;
+  }
+
+  .callout-info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-left: 3.5px solid #3b82f6;
+    color: #1e40af;
+  }
+
+  .callout-success {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-left: 3.5px solid #10b981;
+    color: #065f46;
+  }
+
+  .callout-warning {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 3.5px solid #f59e0b;
+    color: #92400e;
+  }
+
+  .callout-accent {
+    background: #faf5ff;
+    border: 1px solid #e9d5ff;
+    border-left: 3.5px solid #8b5cf6;
+    color: #581c87;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 8pt;
+    page-break-inside: avoid;
+  }
+
+  th {
+    background: #1e293b;
+    color: #f8fafc;
+    font-weight: 700;
+    text-align: left;
+    padding: 6px 8px;
+    border: 1px solid #334155;
+  }
+
+  td {
+    padding: 5px 8px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* Code & Syntax */
+  code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 8pt;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid #e2e8f0;
+  }
+
+  pre {
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 7.5pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    margin: 5px 0 8px 0;
+    page-break-inside: avoid;
+  }
+
+  /* SVG Diagrams */
+  .diagram-container {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 10px 0;
+    text-align: center;
+    page-break-inside: avoid;
+  }
+
+  .diagram-caption {
+    font-size: 7.5pt;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+  }
+
+  .comp-box {
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 8pt;
+  }
+
+  .comp-bad {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-left: 3px solid #f43f5e;
+  }
+
+  .comp-good {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-left: 3px solid #10b981;
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div>
+    <div class="cover-badge">Deep Engineering Architecture &bull; Complete Reference Guide</div>
+    <h1 class="cover-title" style="border:none; padding:0;">DocuChat AI<br><span>Step-by-Step Technical Lifecycle &bull; What, Which Library &amp; Why</span></h1>
+    <div class="cover-subtitle">
+      An exhaustive, engineering-grade walkthrough of the complete RAG pipeline: from document upload, layout decomposition, and custom structure-aware chunking vs LangChain, to ONNX dense vectors, BM25Plus sparse indexes, reciprocal rank fusion, max-scaled reranking, live web intelligence, and precision single-box PDF synchronization.
+    </div>
+
+    <div class="cover-metrics">
+      <div class="metric-card">
+        <div class="metric-num">Custom Chunker</div>
+        <div class="metric-label">StructureChunker vs RecursiveSplitter</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num">FastEmbed ONNX</div>
+        <div class="metric-label">bge-small-en-v1.5 (384d &bull; &lt; 5ms)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num">Dual Hybrid</div>
+        <div class="metric-label">Qdrant Vector + BM25Plus Inverted Index</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cover-footer">
+      <div><strong>Stack:</strong> FastAPI, React 18, PDF.js, Qdrant, Ollama (Qwen 2.5 1.5B), FastEmbed, BM25Plus</div>
+      <div><strong>Documentation:</strong> Production Deep Architecture Reference Manual &bull; 2026 Edition</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 1: SYSTEM OVERVIEW & ARCHITECTURE FLOWCHART -->
+<h1><span class="icon">1</span> Complete End-to-End System Flowchart</h1>
+
+<div class="diagram-container">
+  <svg width="690" height="260" viewBox="0 0 690 260" xmlns="http://www.w3.org/2000/svg" style="font-family: inherit; font-size: 10px;">
+    <rect width="690" height="260" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+
+    <!-- Row 1: Ingestion -->
+    <rect x="15" y="20" width="110" height="45" rx="5" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="70" y="38" text-anchor="middle" font-weight="700" fill="#1e3a8a">1. Upload File</text>
+    <text x="70" y="52" text-anchor="middle" fill="#3b82f6">PDF, DOCX, TXT</text>
+
+    <line x1="125" y1="42" x2="155" y2="42" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="155" y="20" width="130" height="45" rx="5" fill="#fdf4ff" stroke="#d946ef" stroke-width="1.5"/>
+    <text x="220" y="38" text-anchor="middle" font-weight="700" fill="#701a75">2. Docling / Fitz</text>
+    <text x="220" y="52" text-anchor="middle" fill="#a21caf">Extract BBoxes + Text</text>
+
+    <line x1="285" y1="42" x2="315" y2="42" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="315" y="20" width="145" height="45" rx="5" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
+    <text x="387" y="38" text-anchor="middle" font-weight="700" fill="#713f12">3. StructureChunker</text>
+    <text x="387" y="52" text-anchor="middle" fill="#854d0e">400 tok &bull; Keep BBoxes</text>
+
+    <line x1="460" y1="42" x2="490" y2="42" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="490" y="15" width="185" height="55" rx="5" fill="#f0fdf4" stroke="#10b981" stroke-width="1.5"/>
+    <text x="582" y="33" text-anchor="middle" font-weight="700" fill="#064e3b">4. Dual Indexing</text>
+    <text x="582" y="47" text-anchor="middle" fill="#047857">Dense: FastEmbed &rarr; Qdrant</text>
+    <text x="582" y="60" text-anchor="middle" fill="#047857">Sparse: BM25Plus &rarr; Disk JSON</text>
+
+    <!-- Transition down -->
+    <line x1="582" y1="70" x2="582" y2="105" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Row 2: Query & Retrieval -->
+    <rect x="490" y="105" width="185" height="50" rx="5" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text x="582" y="125" text-anchor="middle" font-weight="700" fill="#0f172a">5. Query &amp; Intent Routing</text>
+    <text x="582" y="140" text-anchor="middle" fill="#475569">Doc Mode vs ChatGPT Mode</text>
+
+    <line x1="490" y1="130" x2="445" y2="130" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="290" y="105" width="155" height="50" rx="5" fill="#f0fdf4" stroke="#10b981" stroke-width="1.5"/>
+    <text x="367" y="125" text-anchor="middle" font-weight="700" fill="#064e3b">6. Parallel Hybrid Search</text>
+    <text x="367" y="140" text-anchor="middle" fill="#047857">Qdrant Top-30 + BM25 Top-30</text>
+
+    <line x1="290" y1="130" x2="250" y2="130" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="90" y="105" width="160" height="50" rx="5" fill="#faf5ff" stroke="#8b5cf6" stroke-width="1.5"/>
+    <text x="170" y="125" text-anchor="middle" font-weight="700" fill="#581c87">7. RRF &amp; Max-Scaled Rerank</text>
+    <text x="170" y="140" text-anchor="middle" fill="#7c3aed">k=60 &bull; s/max_s (No Dropoff)</text>
+
+    <!-- Transition down to Generation -->
+    <line x1="170" y1="155" x2="170" y2="185" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Row 3: Generation & Highlighting -->
+    <rect x="70" y="185" width="200" height="50" rx="5" fill="#ede9fe" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="170" y="205" text-anchor="middle" font-weight="700" fill="#312e81">8. Grounded LLM Stream (SSE)</text>
+    <text x="170" y="220" text-anchor="middle" fill="#4338ca">Ollama Qwen 2.5 1.5B (3500 char)</text>
+
+    <line x1="270" y1="210" x2="310" y2="210" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="310" y="185" width="190" height="50" rx="5" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+    <text x="405" y="203" text-anchor="middle" font-weight="700" fill="#831843">9. Best-Box Scoring Refiner</text>
+    <text x="405" y="217" text-anchor="middle" fill="#be185d">Score answer tokens vs box text</text>
+    <text x="405" y="227" text-anchor="middle" font-size="8px" fill="#9d174d">Pick ONLY 1 winning box</text>
+
+    <line x1="500" y1="210" x2="540" y2="210" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="540" y="185" width="135" height="50" rx="5" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="607" y="205" text-anchor="middle" font-weight="700" fill="#14532d">10. PDF.js Canvas</text>
+    <text x="607" y="220" text-anchor="middle" fill="#15803d">1 Line Pulsing Highlight!</text>
+
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"/>
+      </marker>
+    </defs>
+  </svg>
+  <div class="diagram-caption">Figure 1: Full-System Architectural Data Pipeline Flow</div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- SECTION 2: STEP-BY-STEP DEEP DIVE (WHAT, LIBRARY, WHY, NEXT STEP) -->
+<h1><span class="icon">2</span> Deep Step-by-Step Lifecycle (What, Which Library, Why, Next Step)</h1>
+
+<!-- STEP 1 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 01</span>
+    <h3 class="step-name">Document Upload &amp; Binary Persistence</h3>
+    <span class="step-tech">FastAPI &bull; SQLite &bull; Python uuid</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>The user drags a document (PDF, DOCX, TXT) into the frontend sidebar. The browser dispatches a multipart form POST request to <code>/api/documents/upload</code>. The backend verifies file extension, generates a collision-free UUID, streams the binary to local disk at <code>backend/data/uploads/&lt;uuid&gt;_&lt;filename&gt;</code>, and records a document row in <code>rag_app.db</code> with state <code>"processing"</code>.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-lib">&bull; WHICH LIBRARY WE USE:</div>
+    <p><code>FastAPI</code> with <code>python-multipart</code> for asynchronous chunked file streaming; <code>SQLAlchemy 2.0</code> async engine connected to <code>SQLite</code>.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY WE USE THIS APPROACH:</div>
+    <p>Using streaming binary buffers avoids loading 50MB+ documents into RAM simultaneously. Storing on local disk ensures 100% data ownership and privacy—no document binary is ever sent to third-party cloud S3 buckets or external servers.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Structural Parsing (Step 2)</strong>. Why? Raw PDF binaries are just compressed PostScript streams. You cannot perform search or semantic extraction on raw bytes; the file must be structurally decomposed into paragraphs, headings, tables, and bounding boxes.</p>
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 02</span>
+    <h3 class="step-name">Structural Parsing &amp; Bounding Box Extraction</h3>
+    <span class="step-tech">IBM Docling &bull; PyMuPDF (Fitz)</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>The parser decomposes the document into a list of <code>ParsedElement</code> objects. For every heading, paragraph, and table cell, it extracts:
+    <code>text</code>, <code>page</code>, <code>heading_path</code> (e.g., <code>["Education", "Intermediate"]</code>), <code>elem_type</code>, and normalized bounding box coordinates: <code>x0, y0, x1, y1</code>, <code>page_width</code>, <code>page_height</code>, and <code>coord_origin</code> (<code>"TOPLEFT"</code> vs <code>"BOTTOMLEFT"</code>).</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-lib">&bull; WHICH LIBRARY WE USE:</div>
+    <p><strong>Primary:</strong> <code>IBM Docling</code> microservice (containerized on port 5001).<br>
+    <strong>Resilient Fallback:</strong> <code>PyMuPDF</code> (<code>fitz</code> C++ extension) in <code>parsers/docling_parser.py</code>.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY WE CHOSE THESE LIBRARIES (Why NOT standard pypdf or pdfminer?):</div>
+    <p>Standard tools like <code>pypdf</code> or <code>pdfminer</code> dump a flat, unstructured text string. They lose reading order in two-column documents, completely destroy table structures, and discard bounding box coordinates.
+    <br>&bull; <strong>IBM Docling</strong> uses computer-vision layout models (LayoutLMv3/DocLayNet) to reconstruct multi-column reading order and markdown tables.
+    <br>&bull; <strong>PyMuPDF (Fitz)</strong> is a lightning-fast C-library that extracts exact word-level and block-level bounding boxes (<code>rect</code> objects) in milliseconds when offline.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Structure-Aware Chunking (Step 3)</strong>. Why? Parsed elements can be as small as a single word or header. An LLM cannot evaluate a single word in isolation. We must assemble elements into optimal semantic chunks with bounded token windows.</p>
+  </div>
+</div>
+
+<!-- STEP 3 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 03</span>
+    <h3 class="step-name">Structure-Aware Chunking (Why NOT RecursiveCharacterTextSplitter?)</h3>
+    <span class="step-tech">Custom StructureChunker (backend/chunking/)</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>Consecutive <code>ParsedElement</code> objects are aggregated into semantic chunks of &approx; 400 target tokens with a 50-token rolling overlap. Table structures and section heading paths are kept together. Every bounding box from the grouped elements is preserved inside <code>chunk.bboxes</code>.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-lib">&bull; WHICH LIBRARY WE USE &amp; DIRECT COMPARISON:</div>
+    <div class="comparison-grid">
+      <div class="comp-box comp-bad">
+        <strong>❌ Why NOT LangChain RecursiveCharacterTextSplitter:</strong>
+        <p>1. <strong>Loses All Coordinates:</strong> LangChain splitters treat text as a flat string. All bounding boxes (<code>x0, y0, x1, y1</code>) are completely discarded. Visual PDF highlighting becomes <strong>impossible</strong>.</p>
+        <p>2. <strong>Destroys Tables:</strong> Cuts markdown tables in half at arbitrary character limits, creating broken rows.</p>
+        <p>3. <strong>Detaches Headers:</strong> Splits a section heading away from its paragraphs, destroying hierarchical context.</p>
+      </div>
+      <div class="comp-box comp-good">
+        <strong>✅ Why Custom StructureChunker:</strong>
+        <p>1. <strong>BBox Preservation:</strong> Preserves all bounding boxes and ties each box directly to its exact text string inside the chunk metadata.</p>
+        <p>2. <strong>Table Integrity:</strong> Identifies table elements and ensures entire tables remain contiguous.</p>
+        <p>3. <strong>Heading Paths:</strong> Maintains section hierarchy (e.g. <code>["Education", "Intermediate"]</code>) so the LLM knows what section the facts belong to.</p>
+      </div>
+    </div>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Dual Storage &amp; Indexing (Step 4)</strong>. Why? Raw chunk text cannot be searched semantically. We must convert chunks into dense vector representations for conceptual search AND sparse lexical terms for exact keyword lookup.</p>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- STEP 4 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 04</span>
+    <h3 class="step-name">Dual Storage Indexing: Dense Vectors &amp; Sparse BM25Plus</h3>
+    <span class="step-tech">FastEmbed (ONNX) &bull; Qdrant &bull; BM25Plus</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>Each chunk is indexed into two parallel storage engines:
+    <br>1. <strong>Dense Vector:</strong> Generated embeddings are inserted into Qdrant collection <code>doc_chunks</code> with payload: <code>chunk_id</code>, <code>doc_id</code>, <code>text</code>, <code>page</code>, <code>bboxes</code>, <code>heading_path</code>.
+    <br>2. <strong>Sparse Lexical:</strong> Chunks are tokenized and saved to a local inverted index at <code>backend/data/bm25/&lt;doc_id&gt;.json</code>.
+    <br>The document status in SQLite updates to <code>"ready"</code>.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-lib">&bull; WHICH MODELS &amp; LIBRARIES WE USE:</div>
+    <p>&bull; <strong>Dense Embedding:</strong> <code>FastEmbed</code> with model <code>BAAI/bge-small-en-v1.5</code> (384 dimensions).<br>
+    &bull; <strong>Vector DB:</strong> <code>Qdrant</code> (port 6333 or embedded disk storage at <code>./data/qdrant_storage</code>).<br>
+    &bull; <strong>Sparse Engine:</strong> <code>BM25Plus</code> (from <code>rank-bm25</code>).</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY THESE MODELS &amp; WHY BM25Plus?</div>
+    <p>1. <strong>Why BGE-Small (384d)?</strong> Ranked #1 on the MTEB Retrieval leaderboard for small models. 384 dimensions provide rich semantic representation while keeping RAM usage low and cosine similarity latency under 5 milliseconds.
+    <br>2. <strong>Why FastEmbed ONNX over PyTorch / SentenceTransformers?</strong> PyTorch introduces 2GB+ of bloat, CUDA dependency issues, and slow startup times. FastEmbed runs on the optimized C++ ONNX runtime with zero PyTorch dependencies, computing embeddings in &lt; 5 ms per query.
+    <br>3. <strong>Why BM25Plus alongside Dense Vectors?</strong> Dense vectors represent semantic "gist", but frequently miss exact keywords, acronyms, and numbers (e.g. <em>"81%"</em>, <em>"SVIT"</em>, <em>"Docker"</em>). BM25 guarantees exact keyword hits.
+    <br>4. <strong>Why BM25Plus over BM25Okapi?</strong> In small document corpora ($N \le 5$), BM25Okapi produces negative IDF scores when document frequency approaches corpus size. A negative score causes <code>if score &gt; 0</code> to discard every chunk! <code>BM25Plus</code> adds a lower-bound delta ($\delta = 1$) ensuring strictly positive, calibrated scores.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Query Ingestion &amp; Intent Routing (Step 5)</strong>. Why? Ingestion is complete. When the user asks a question, the system must decide whether to query the document index or launch live web search.</p>
+  </div>
+</div>
+
+<!-- STEP 5 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 05</span>
+    <h3 class="step-name">Query Ingestion &amp; Intent Routing</h3>
+    <span class="step-tech">QueryRouter (backend/llm/router.py)</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>The user submits a question via the chat input. <code>QueryRouter</code> inspects the active document scope and query intent:
+    <br>&bull; <strong>Document Scope Active:</strong> Dispatches to Hybrid Retrieval (Step 6).
+    <br>&bull; <strong>No Scope / ChatGPT Mode:</strong> Dispatches to Real-Time Web Knowledge Engine (Step 8).</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY WE USE INTENT ROUTING:</div>
+    <p>Without routing, asking "What is the stock price of Tesla?" while a resume is open causes the system to search the resume, fail, and output "Not found". Routing enables the dual capability: deep document compliance when needed, and unrestricted ChatGPT-style versatility when desired.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Parallel Hybrid Retrieval (Step 6)</strong>. Why? If in document mode, we must retrieve the most relevant chunks using both vector and keyword search.</p>
+  </div>
+</div>
+
+<!-- STEP 6 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 06</span>
+    <h3 class="step-name">Parallel Hybrid Retrieval &amp; Reciprocal Rank Fusion (RRF)</h3>
+    <span class="step-tech">asyncio &bull; Qdrant &bull; BM25Plus &bull; RRF (k=60)</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>The query is rewritten using chat history to resolve ambiguous pronouns (e.g. <em>"What are his skills?"</em> &rarr; <em>"What are Sai Charankumar's technical skills?"</em>). Concurrently via <code>asyncio.gather()</code>, the system queries:
+    <br>&bull; Top-30 dense vector hits from Qdrant.
+    <br>&bull; Top-30 lexical hits from BM25Plus.
+    <br>Scores are fused using Reciprocal Rank Fusion (RRF):
+    <br><code>RRF_Score(d) = &sum; [ 1 / (60 + rank(d)) ]</code></p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY RRF (Why NOT simple score averaging?):</div>
+    <p>Dense vector scores are cosine similarities bound to $[0, 1]$, whereas BM25 scores are unbounded term frequencies $[0, 25+]$. Adding them directly is mathematically invalid. RRF is scale-invariant: it ranks documents strictly by their relative placement in each search list, guaranteeing that chunks appearing high on both lists rise to the top.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Deduplication &amp; Max-Scaled Reranking (Step 7)</strong>. Why? Fused candidates may contain redundant chunks, and RRF rankings should be rescored with a cross-attention reranker for maximum precision.</p>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- STEP 7 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 07</span>
+    <h3 class="step-name">Deduplication &amp; Max-Scaled Score Calibration</h3>
+    <span class="step-tech">backend/retrieval/reranker.py &bull; Max-Scaling</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>Top candidate chunks are deduplicated by chunk ID and text similarity. A Cross-Encoder / scoring model rescores the remaining candidates.
+    <strong>Critical Solved Innovation:</strong> Raw scores are normalized using <em>Max-Scaling</em>:
+    <br><code>normalized_score = raw_score / max(raw_scores)</code>
+    <br>Chunks meeting the <code>score_threshold &gt;= 0.25</code> pass to the generator.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY MAX-SCALING (Why NOT standard Min-Max Normalization?):</div>
+    <p>Min-max normalization: <code>(s - min) / (max - min)</code> mathematically forces the lowest candidate chunk to $0.0$. In a two-chunk document, Chunk 2 always becomes $0.0$ and gets dropped by the threshold filter. This was causing second-page project skills to disappear! <strong>Max-Scaling</strong> maintains relative strength and allows all relevant secondary chunks to enter the prompt.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Grounded LLM Generation (Step 8)</strong>. Why? With the highest-quality candidate chunks in hand, we now instruct the LLM to generate a factual, cited response.</p>
+  </div>
+</div>
+
+<!-- STEP 8 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 08</span>
+    <h3 class="step-name">Grounded LLM Streaming Generation (SSE)</h3>
+    <span class="step-tech">Ollama &bull; Qwen 2.5 (1.5B) &bull; Starlette SSE</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>Retrieved chunks are formatted into a structured prompt with <strong>expanded 3,500-character windows</strong>. The prompt enforces strict rules:
+    <br>&bull; Answer ONLY from provided text sources.
+    <br>&bull; Cite every factual assertion with inline bracket tags: <code>[1]</code>, <code>[2]</code>.
+    <br>&bull; If unmentioned, state: <em>"This is not mentioned in the document."</em>
+    <br>Tokens stream in real time to the browser via Server-Sent Events (<code>event: token</code>).</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-lib">&bull; WHICH LLM WE USE &amp; WHY:</div>
+    <p><strong>Ollama with Qwen 2.5 (1.5B)</strong> (<code>qwen2.5:1.5b</code>).
+    <br>&bull; <strong>Why Qwen 2.5?</strong> Exceptional instruction-following, structured citations, multilingual support, and 32k context window.
+    <br>&bull; <strong>Why 1.5B Parameters?</strong> Runs at 40+ tokens/second on consumer CPU/GPUs with only ~1.8GB VRAM footprint. Zero cloud API fees.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY 3,500-CHARACTER SNIPPETS (Why NOT 900 chars?):</div>
+    <p>In initial testing, <code>snippet = text[:900]</code> cut off Chunk 0 right in the middle of the "Technical Skills" table at "Oracle", causing Machine Learning, Generative AI, and tools to vanish. Expanding to 3,500 chars ensures complete sections enter the LLM context.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Best-Box Scoring Refinement (Step 9)</strong>. Why? The LLM has generated an answer, but we must pinpoint the single exact bounding box to highlight on the PDF canvas.</p>
+  </div>
+</div>
+
+<!-- STEP 9 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 09</span>
+    <h3 class="step-name">Global Best-Box Scoring &amp; Answer Refinement</h3>
+    <span class="step-tech">refine_citations_for_answer() in backend/llm/generator.py</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>Once generation finishes, the backend parses the generated answer text and extracts key entities (numbers, percentages, skill keywords). It computes an overlap score against the raw text of every bounding box across all candidate chunks. <strong>The single highest-scoring bounding box is selected as the winner.</strong> All other boxes are pruned. The backend emits <code>event: citations</code>.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY WE USE GLOBAL BEST-BOX SCORING (Why NOT all chunk boxes?):</div>
+    <p>Passing all chunk bounding boxes causes the <strong>"Blue Screen" Over-Highlighting Bug</strong>—where 20+ boxes cover an entire page in blue rectangles. Global best-box scoring guarantees single-line precision: only the exact sentence proving the answer lights up.</p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-next">&bull; WHAT IS THE NEXT STEP &amp; WHY:</div>
+    <p><strong>Next Step: Synchronized PDF Canvas Highlighting (Step 10)</strong>. Why? The frontend has received the winning coordinates and must render them onto the PDF canvas.</p>
+  </div>
+</div>
+
+<!-- STEP 10 -->
+<div class="deep-step">
+  <div class="deep-step-header">
+    <span class="step-num">STEP 10</span>
+    <h3 class="step-name">Synchronized PDF.js Canvas Highlighting</h3>
+    <span class="step-tech">React 18 &bull; PDF.js (3.11) &bull; HTML5 Canvas</span>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-what">&bull; WHAT HAPPENS IN THIS STEP:</div>
+    <p>The right panel opens the PDF via PDF.js on an HTML5 <code>&lt;canvas&gt;</code>, navigates to the cited page, scales the normalized coordinates to match the canvas dimensions, and draws an animated bounding box with glowing keyframes:
+    <br><code>animation: pulseHighlight 1.5s infinite;</code></p>
+  </div>
+  <div class="subfield">
+    <div class="subfield-title title-why">&bull; WHY WE CONVERT COORDINATE ORIGINS:</div>
+    <p>PDF documents natively measure coordinates from the <strong>bottom-left</strong>, whereas HTML5 canvas measures from the <strong>top-left</strong>. The frontend checks <code>box.coord_origin</code> and dynamically transforms the Y-axis:
+    <br><code>top = box.coord_origin === "BOTTOMLEFT" ? (pageHeight - box.y1) * scaleY : box.y0 * scaleY;</code></p>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- SECTION 3: SUMMARY COMPARISON TABLE -->
+<h1><span class="icon">3</span> Engineering Decision &amp; Tool Selection Matrix</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 18%;">Pipeline Stage</th>
+      <th style="width: 22%;">Chosen Technology</th>
+      <th style="width: 25%;">Rejected Alternative</th>
+      <th>Engineering Rationale &amp; Benefit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Parsing</strong></td>
+      <td><strong>IBM Docling + PyMuPDF</strong></td>
+      <td><code>pypdf</code> / <code>pdfminer</code></td>
+      <td>Extracts vision layout, markdown tables, and word-level coordinates; standard tools flatten text and lose coordinates.</td>
+    </tr>
+    <tr>
+      <td><strong>Chunking</strong></td>
+      <td><strong>StructureChunker</strong> (Custom)</td>
+      <td>LangChain <code>RecursiveSplitter</code></td>
+      <td>Preserves bounding box tuples, table rows, and heading hierarchy; LangChain strips all coordinates making highlights impossible.</td>
+    </tr>
+    <tr>
+      <td><strong>Dense Vectors</strong></td>
+      <td><strong>FastEmbed (BGE-Small)</strong></td>
+      <td><code>sentence-transformers</code> (PyTorch)</td>
+      <td>Pure ONNX runtime in C++, &lt; 5 ms inference, zero PyTorch footprint; #1 MTEB retrieval performance.</td>
+    </tr>
+    <tr>
+      <td><strong>Sparse Index</strong></td>
+      <td><strong>BM25Plus</strong></td>
+      <td><code>BM25Okapi</code></td>
+      <td>Guarantees non-negative IDF on small corpora ($N \le 5$); BM25Okapi produces negative scores and drops candidate chunks.</td>
+    </tr>
+    <tr>
+      <td><strong>Fusion</strong></td>
+      <td><strong>Reciprocal Rank Fusion</strong></td>
+      <td>Raw Score Averaging</td>
+      <td>Scale-invariant fusion ($k=60$); combines disparate metric scales (cosine similarity vs unbounded BM25 frequencies).</td>
+    </tr>
+    <tr>
+      <td><strong>Reranking</strong></td>
+      <td><strong>Max-Scaling Normalizer</strong></td>
+      <td>Min-Max Normalizer</td>
+      <td>Min-max forces 2nd chunk to 0.0, causing secondary sections to drop off. Max-scaling ($s/\max s$) preserves true relative score.</td>
+    </tr>
+    <tr>
+      <td><strong>Highlighting</strong></td>
+      <td><strong>Answer-to-BBox Refiner</strong></td>
+      <td>Pass All Chunk BBoxes</td>
+      <td>Evaluates token overlap to pick the 1 exact answer box; completely eliminates the 20-box "blue screen" bug.</td>
+    </tr>
+    <tr>
+      <td><strong>Local LLM</strong></td>
+      <td><strong>Ollama Qwen 2.5 (1.5B)</strong></td>
+      <td>Cloud APIs (GPT-4 / Claude)</td>
+      <td>100% private, 40+ tokens/sec, runs locally on 8GB RAM laptops, zero subscription costs.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- FOOTER NOTE -->
+<div style="margin-top: 30px; text-align: center; font-size: 8.5pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+  DocuChat AI &bull; Complete End-to-End Architectural Reference Manual &bull; Generated &amp; Formatted for Production Verification
+</div>
+
+</body>
+</html>
