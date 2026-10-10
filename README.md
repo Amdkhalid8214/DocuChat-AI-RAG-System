@@ -229,7 +229,7 @@ DATABASE_URL=sqlite+aiosqlite:///./data/rag_app.db
 
 # LLM Engine (Ollama)
 LLM_BASE_URL=http://localhost:11434
-LLM_MODEL=qwen2.5:1.5b
+LLM_MODEL=qwen2.5:7b
 LLM_TEMPERATURE=0.1
 LLM_MAX_TOKENS=1024
 
