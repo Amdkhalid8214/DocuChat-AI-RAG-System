@@ -3,7 +3,7 @@
 # 📑 DocuChat AI
 ### **Enterprise-Grade Hybrid RAG & Visual Document Intelligence Platform**
 
-*An end-to-end, production-ready Document RAG platform featuring visual bounding-box provenance highlighting, hybrid dense/sparse retrieval with Reciprocal Rank Fusion (RRF), live web knowledge fallback, and grounded LLM generation powered by Ollama (`qwen2.5:1.5b`) & Qdrant.*
+*An end-to-end, production-ready Document RAG platform featuring visual bounding-box provenance highlighting, hybrid dense/sparse retrieval with Reciprocal Rank Fusion (RRF), live web knowledge fallback, and grounded LLM generation powered by Ollama (`qwen2.5:1.7b`) & Qdrant.*
 
 ---
 
