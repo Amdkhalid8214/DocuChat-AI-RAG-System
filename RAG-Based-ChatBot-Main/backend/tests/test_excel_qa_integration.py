@@ -36,7 +36,24 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 @pytest.fixture
 def amd_excel_doc_id():
-    return "d85d2ab6-4220-44bb-bdd4-657966a3228b"
+    doc_id = "d85d2ab6-4220-44bb-bdd4-657966a3228b"
+    from backend.config import settings
+    import openpyxl
+    target_path = os.path.join(settings.UPLOAD_DIR, f"{doc_id}_AMD Excel.xlsx")
+    if not os.path.exists(target_path):
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+        ws.append(["Employee", "Department", "Sales", "Target"])
+        ws.append(["Ravi", "IT", 50000, 45000])
+        ws.append(["Priya", "HR", 30000, 35000])
+        ws.append(["Arjun", "IT", 70000, 60000])
+        ws.append(["Sneha", "Sales", 40000, 40000])
+        ws.append(["Kiran", "Sales", 60000, 50000])
+        wb.save(target_path)
+        wb.close()
+    return doc_id
 
 
 def test_excel_analyzer_metadata(amd_excel_doc_id):

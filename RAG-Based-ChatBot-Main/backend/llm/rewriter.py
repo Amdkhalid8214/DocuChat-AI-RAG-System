@@ -68,7 +68,7 @@ JSON:"""
                     temperature=0.2,
                     max_tokens=60
                 ),
-                timeout=3.0
+                timeout=1.2
             )
 
             json_match = re.search(r"\{.*?\}", raw_resp, re.DOTALL)
@@ -84,9 +84,16 @@ JSON:"""
                 return queries
 
         except Exception as e:
-            logger.warning(f"Query rewriter error: {e}")
+            logger.debug(f"Query rewriter fast-fallback: {e}")
 
-        # Fallback if JSON generation fails or times out
+        # Fallback if generation times out: enrich with prior user query terms instantly
+        last_user_query = ""
+        for msg in reversed(chat_history):
+            if msg.get("role") == "user":
+                last_user_query = str(msg.get("content", "")).strip()
+                break
+        if last_user_query:
+            return [clean_q, f"{clean_q} {last_user_query}", f"{last_user_query} details"]
         return [clean_q, f"{clean_q} information"]
 
 query_rewriter = QueryRewriter()

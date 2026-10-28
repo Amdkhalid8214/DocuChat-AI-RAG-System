@@ -7,7 +7,7 @@ from backend.config import settings
 from backend.llm.client import ollama_client
 from backend.llm.langchain_adapter import langchain_adapter
 from backend.retrieval.web_search import live_web_search
-from backend.llm.router import is_verbatim_extraction_request
+from backend.llm.router import is_verbatim_extraction_request, GREETINGS_PATTERN
 from backend.llm.prompts import (
     GROUNDED_SYSTEM_TEMPLATE,
     GROUNDED_HUMAN_TEMPLATE,
@@ -41,10 +41,10 @@ class GroundedGenerator:
         from collections import Counter
 
         if max_char_budget is None:
-            configured_budget = getattr(settings, "CONTEXT_BUDGET_TOKENS", 2048)
-            ctx_tokens = getattr(settings, "LLM_NUM_CTX", 4096)
-            max_out_tokens = getattr(settings, "LLM_MAX_TOKENS", 1024)
-            available_tokens = min(configured_budget, max(1500, ctx_tokens - max_out_tokens - 800))
+            configured_budget = getattr(settings, "CONTEXT_BUDGET_TOKENS", 750)
+            ctx_tokens = getattr(settings, "LLM_NUM_CTX", 2048)
+            max_out_tokens = getattr(settings, "LLM_MAX_TOKENS", 512)
+            available_tokens = min(configured_budget, max(500, ctx_tokens - max_out_tokens - 400))
             max_char_budget = available_tokens * 4
 
         context_blocks = []
@@ -187,19 +187,39 @@ class GroundedGenerator:
         Injects bounded persistent conversational memory across all modes.
         """
         from backend.tools.searxng_search import active_web_citations
+        from backend.tools.weather import active_weather_data
+        from backend.tools.excel_generator import active_excel_artifact, generate_workbook_from_request
+        from backend.tools.document_generator import active_document_artifact, generate_document_from_request
+        from backend.tools.pdf_tools import active_pdf_artifact, execute_pdf_tool_from_request
+        from backend.llm.router import is_excel_generation_request, is_document_generation_request, is_pdf_tools
+
         active_web_citations.set([])
+        active_weather_data.set(None)
+        active_excel_artifact.set(None)
+        active_document_artifact.set(None)
+        active_pdf_artifact.set(None)
 
         # Determine exact request type
         is_verbatim = is_verbatim_extraction_request(question)
         prompt_type = "verbatim_extraction" if is_verbatim else "grounded_qa"
 
-        from backend.llm.router import is_excel_generation_request
-        from backend.tools.excel_generator import active_excel_artifact, generate_workbook_from_request
         is_excel_gen = (route == "excel_generation" or is_excel_generation_request(question))
         if is_excel_gen:
             route = "excel_generation"
             router_badge = "📊 Excel Generator"
             prompt_type = "excel_generation"
+
+        is_doc_gen = (route == "document_generation" or is_document_generation_request(question))
+        if is_doc_gen:
+            route = "document_generation"
+            router_badge = "📝 Document Generator"
+            prompt_type = "document_generation"
+
+        is_pdf = (route == "pdf_tools" or is_pdf_tools(question))
+        if is_pdf:
+            route = "pdf_tools"
+            router_badge = "🛠️ PDF Tools"
+            prompt_type = "pdf_tools"
 
         if is_verbatim and route == "document":
             router_badge = "Exact Extraction"
@@ -279,10 +299,92 @@ class GroundedGenerator:
             yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
             return
 
+        # Case 0.5: Document Generation Route (DOCX, PDF, TXT, MD)
+        if is_doc_gen:
+            active_document_artifact.set(None)
+            try:
+                # 1. Provide retrieved document context if available (for document-based report generation)
+                doc_ctx = ""
+                if retrieved_chunks:
+                    doc_ctx = "\n\n".join([c.get("text", "") for c in retrieved_chunks[:5]])
+
+                artifact = await generate_document_from_request(
+                    prompt=question,
+                    context=doc_ctx,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    history=history
+                )
+                active_document_artifact.set(artifact)
+
+                # Emit structured document_artifact event for chat UI card
+                yield f"event: document_artifact\ndata: {json.dumps(artifact, ensure_ascii=False)}\n\n"
+
+                # Stream confirmation message tokens
+                reply_text = artifact.get(
+                    "reply_message",
+                    f"Done! I generated the {artifact.get('file_type')} {artifact.get('filename')}."
+                )
+                words = reply_text.split(" ")
+                for idx, w in enumerate(words):
+                    tok = w if idx == len(words) - 1 else w + " "
+                    yield f"event: token\ndata: {json.dumps({'content': tok}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.01)
+
+            except Exception as ex:
+                logger.error(f"[DOC_GEN] Failed to generate document: {ex}", exc_info=True)
+                err_text = f"Failed to generate document: {str(ex)}"
+                for w in err_text.split(" "):
+                    yield f"event: token\ndata: {json.dumps({'content': w + ' '}, ensure_ascii=False)}\n\n"
+
+            yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
+            return
+
+        # Case 0.7: PDF Tools Route (Merge, Split, Extract, Rotate, Compress, Text, Tables, Info, etc.)
+        if is_pdf:
+            active_pdf_artifact.set(None)
+            try:
+                # Resolve candidate documents if provided or open
+                candidate_doc_ids = []
+                if retrieved_chunks:
+                    candidate_doc_ids = list({c.get("doc_id") for c in retrieved_chunks if c.get("doc_id")})
+
+                artifact = await execute_pdf_tool_from_request(
+                    prompt=question,
+                    doc_ids=candidate_doc_ids,
+                    history=history,
+                    user_id=user_id,
+                    conversation_id=conversation_id
+                )
+                active_pdf_artifact.set(artifact)
+
+                # Emit structured pdf_artifact event for chat UI card
+                yield f"event: pdf_artifact\ndata: {json.dumps(artifact, ensure_ascii=False)}\n\n"
+
+                # Stream confirmation message tokens
+                reply_text = artifact.get(
+                    "reply_message",
+                    f"Done! I processed the PDF and created {artifact.get('filename')}."
+                )
+                words = reply_text.split(" ")
+                for idx, w in enumerate(words):
+                    tok = w if idx == len(words) - 1 else w + " "
+                    yield f"event: token\ndata: {json.dumps({'content': tok}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.01)
+
+            except Exception as ex:
+                logger.error(f"[PDF_TOOLS] Failed to execute PDF tool: {ex}", exc_info=True)
+                err_text = f"Failed to execute PDF tool: {str(ex)}"
+                for w in err_text.split(" "):
+                    yield f"event: token\ndata: {json.dumps({'content': w + ' '}, ensure_ascii=False)}\n\n"
+
+            yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
+            return
+
         # Case A: General chat route or explicit web mode route
         if route != "document":
             from backend.tools.weather import active_weather_data, get_weather_forecast_async, extract_location_from_query
-            from backend.llm.router import is_weather_request, is_explicit_web_search_request
+            from backend.llm.router import is_weather_request, is_explicit_web_search_request, GREETINGS_PATTERN
             from backend.tools.searxng_search import active_web_citations, search_searxng_async
             from backend.llm.memory import package_web_citations
             active_weather_data.set(None)
@@ -299,21 +401,28 @@ class GroundedGenerator:
                     if w_res.get("status") == "success" and w_res.get("weather"):
                         active_weather_data.set(w_res["weather"])
                         live_context = (
-                            f"Verified real-time weather observations and forecast from Open-Meteo:\n{w_res['summary']}\n"
-                            "Instructions: Format your response like this:\n"
-                            f"1. Start with a warm greeting: \"Here's the weather in {w_res['weather']['location']} today...\"\n"
-                            "2. Underneath, provide a concise 'Should you go out today?' section with bullet points:\n"
-                            "- 🏖 Beach visit (or outdoor activities): based on temperature and comfortable times\n"
-                            "- 🌧 Rain: state rain probability and whether rain gear is needed\n"
-                            "- 👕 What to wear: clothing advice based strictly on temperature\n"
-                            "Ground all statements strictly in the verified numbers above."
+                            f"Verified real-time weather from Open-Meteo:\n{w_res['summary']}\n"
+                            f"Provide a friendly, crisp 2-3 bullet point summary for {w_res['weather']['location']}: "
+                            "current temperature & condition, rain probability, and clothing advice. "
+                            "Keep it concise and under 60 words."
                         )
                         # Immediately yield weather event for frontend WeatherCard
                         yield f"event: weather\ndata: {json.dumps(w_res['weather'])}\n\n"
                 except Exception as ex:
                     logger.warning(f"Error fetching live weather in generator: {ex}")
 
-            elif route == "web" or (web_mode and not is_weather) or is_explicit_web_search_request(question):
+            elif router_badge == "📊 Formula Explainer":
+                live_context = (
+                    "You are a senior Excel specialist and financial modeling architect. "
+                    "The user is asking to explain an Excel formula, function, or expression. "
+                    "Provide a clear, authoritative explanation with:\n"
+                    "1. Executive Summary: What the formula computes.\n"
+                    "2. Syntax & Parameters: What each argument represents.\n"
+                    "3. Working Example: Concrete cell values and output.\n"
+                    "4. Error Handling: Common pitfalls (#DIV/0!, #N/A, #VALUE!) and safeguards (IFERROR, ISBLANK)."
+                )
+
+            elif (route == "web" or (web_mode and not is_weather) or is_explicit_web_search_request(question)) and not bool(GREETINGS_PATTERN.match(question.strip())):
                 router_badge = "🌐 Live Web Search"
                 try:
                     search_res = await search_searxng_async(question, inspect_pages=True, fallback=True)
@@ -344,16 +453,61 @@ class GroundedGenerator:
             if excel_art:
                 yield f"event: excel_artifact\ndata: {json.dumps(excel_art, ensure_ascii=False)}\n\n"
 
+            # Check if document generator tool was executed
+            doc_art = active_document_artifact.get()
+            if doc_art:
+                yield f"event: document_artifact\ndata: {json.dumps(doc_art, ensure_ascii=False)}\n\n"
+
+            # Check if pdf tools was executed
+            pdf_art = active_pdf_artifact.get()
+            if pdf_art:
+                yield f"event: pdf_artifact\ndata: {json.dumps(pdf_art, ensure_ascii=False)}\n\n"
+
             web_cites = active_web_citations.get([])
             yield f"event: citations\ndata: {json.dumps({'citations': web_cites})}\n\n"
             yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
             return
 
+        # Check if Spreadsheet Analysis is active
+        from backend.tools.excel_analyzer import active_excel_context, execute_excel_analysis
+        excel_ctx = active_excel_context.get()
+        is_spreadsheet_mode = bool(
+            router_badge == "📊 Spreadsheet Analysis" or
+            (excel_ctx and excel_ctx.get("has_spreadsheet"))
+        )
+
+        if is_spreadsheet_mode:
+            try:
+                analysis_res = execute_excel_analysis(
+                    operation="query",
+                    query=question,
+                    doc_id=excel_ctx.get("doc_id") if excel_ctx else None
+                )
+                if analysis_res.get("status") == "success" and analysis_res.get("answer"):
+                    answer_text = analysis_res["answer"]
+                    words = answer_text.split(" ")
+                    for idx, w in enumerate(words):
+                        tok = w if idx == len(words) - 1 else w + " "
+                        yield f"event: token\ndata: {json.dumps({'content': tok}, ensure_ascii=False)}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    sheet_cite = [{
+                        "source_index": 1,
+                        "filename": analysis_res.get("filename", "Spreadsheet.xlsx"),
+                        "doc_id": excel_ctx.get("doc_id", "") if excel_ctx else "excel_file",
+                        "page": 1,
+                        "text": f"Calculation verified across all data rows in {analysis_res.get('filename')}.",
+                        "bboxes": []
+                    }]
+                    yield f"event: citations\ndata: {json.dumps({'citations': sheet_cite})}\n\n"
+                    yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
+                    return
+            except Exception as err:
+                logger.warning(f"[SPREADSHEET_QA] Direct analysis execution error: {err}")
+
         # Case B: Document route but nothing retrieved or passed threshold
         # (e.g. low relevance, off-topic question asked while document is loaded)
         if not retrieved_chunks:
-            from backend.tools.excel_analyzer import active_excel_context, execute_excel_analysis
-            excel_ctx = active_excel_context.get()
             spreadsheet_chunk = None
             if excel_ctx:
                 try:
@@ -451,6 +605,16 @@ class GroundedGenerator:
         excel_art = active_excel_artifact.get()
         if excel_art:
             yield f"event: excel_artifact\ndata: {json.dumps(excel_art, ensure_ascii=False)}\n\n"
+
+        # Check if document generator tool was executed
+        doc_art = active_document_artifact.get()
+        if doc_art:
+            yield f"event: document_artifact\ndata: {json.dumps(doc_art, ensure_ascii=False)}\n\n"
+
+        # Check if pdf tools was executed
+        pdf_art = active_pdf_artifact.get()
+        if pdf_art:
+            yield f"event: pdf_artifact\ndata: {json.dumps(pdf_art, ensure_ascii=False)}\n\n"
 
         # Send citations event (only containing the exact answer highlight boxes and web citations)
         yield f"event: citations\ndata: {json.dumps({'citations': citations})}\n\n"
@@ -704,8 +868,8 @@ class GroundedGenerator:
                     if filtered_cites:
                         refined = filtered_cites
 
-            # Sort logically by (page, source_index) and re-index
-            refined.sort(key=lambda c: (int(c.get("page") or 1), c.get("source_index", 1)))
+            # Sort logically by source_index to preserve primary relevance order
+            refined.sort(key=lambda c: c.get("source_index", 1))
             if cited_indices:
                 sorted_cites = sorted(cited_indices)
                 for i, c in enumerate(refined):
@@ -740,8 +904,8 @@ class GroundedGenerator:
                 refined = [first_cite]
 
 
-        # Sort refined citations logically by (page, source_index)
-        refined.sort(key=lambda c: (int(c.get("page") or 1), c.get("source_index", 1)))
+        # Sort refined citations logically by source_index
+        refined.sort(key=lambda c: c.get("source_index", 1))
         return refined
 
     def _locate_pinpoint_answer_boxes(

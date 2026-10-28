@@ -10,7 +10,7 @@ import json
 import logging
 import contextvars
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import httpx
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool

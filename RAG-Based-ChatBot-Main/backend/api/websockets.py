@@ -53,12 +53,26 @@ async def websocket_chat_endpoint(websocket: WebSocket, token: Optional[str] = Q
             try:
                 msg_payload = json.loads(raw_data)
             except Exception:
-                await websocket.send_json({"event": "error", "data": {"message": "Invalid JSON payload"}})
+                try:
+                    await websocket.send_json({"event": "error", "data": {"message": "Invalid JSON payload"}})
+                except Exception:
+                    break
+                continue
+
+            # Heartbeat ping handling
+            if msg_payload.get("action") == "ping" or msg_payload.get("ping"):
+                try:
+                    await websocket.send_json({"event": "pong"})
+                except Exception:
+                    break
                 continue
 
             message = msg_payload.get("message", "").strip()
             if not message:
-                await websocket.send_json({"event": "error", "data": {"message": "Message cannot be empty"}})
+                try:
+                    await websocket.send_json({"event": "error", "data": {"message": "Message cannot be empty"}})
+                except Exception:
+                    break
                 continue
 
             conversation_id = msg_payload.get("conversation_id")
@@ -210,6 +224,17 @@ async def websocket_chat_endpoint(websocket: WebSocket, token: Optional[str] = Q
             else:
                 active_excel_context.set(None)
 
+            from backend.tools.searxng_search import active_web_citations
+            from backend.tools.weather import active_weather_data
+            from backend.tools.excel_generator import active_excel_artifact
+            from backend.tools.document_generator import active_document_artifact
+            from backend.tools.pdf_tools import active_pdf_artifact
+            active_web_citations.set([])
+            active_weather_data.set(None)
+            active_excel_artifact.set(None)
+            active_document_artifact.set(None)
+            active_pdf_artifact.set(None)
+
             # 5. Route query (prioritizes Live Weather, supports explicit Real-Web Mode)
             web_mode = bool(msg_payload.get("web_mode", False))
             route, badge = await query_router.route_query(
@@ -235,7 +260,8 @@ async def websocket_chat_endpoint(websocket: WebSocket, token: Optional[str] = Q
             queries = [message]
             from backend.llm.router import DOC_EXPLICIT_REGEX
             is_doc_excel = (route == "excel_generation" and has_documents and bool(DOC_EXPLICIT_REGEX.search(message)))
-            if route == "document" or is_doc_excel:
+            is_doc_gen = (route == "document_generation")
+            if route == "document" or is_doc_excel or (is_doc_gen and has_documents):
                 queries = await query_rewriter.transform_query(message, history_dicts)
                 retrieved_chunks = await retrieval_pipeline.retrieve(
                     queries=queries,
@@ -258,6 +284,9 @@ async def websocket_chat_endpoint(websocket: WebSocket, token: Optional[str] = Q
             captured_citations = []
             captured_weather = None
             captured_excel_artifact = None
+            captured_document_artifact = None
+            captured_pdf_artifact = None
+            client_disconnected = False
 
             try:
                 async for sse_chunk in grounded_generator.stream_rag_response(
@@ -272,44 +301,72 @@ async def websocket_chat_endpoint(websocket: WebSocket, token: Optional[str] = Q
                     conversation_id=conversation_id,
                 ):
                     # Parse internal SSE chunks into structured WebSocket messages
-                    for line in sse_chunk.strip().split("\n"):
-                        if line.startswith("event:"):
-                            evt_type = line[6:].strip()
-                        elif line.startswith("data:"):
-                            payload_str = line[5:].strip()
-                            try:
-                                d = json.loads(payload_str)
-                                if evt_type == "token":
-                                    token_content = d.get("content", "")
-                                    accumulated_tokens.append(token_content)
-                                    await websocket.send_json({
-                                        "event": "token",
-                                        "request_id": request_id,
-                                        "data": {"content": token_content}
-                                    })
-                                elif evt_type == "excel_artifact":
-                                    captured_excel_artifact = d
-                                    await websocket.send_json({
-                                        "event": "excel_artifact",
-                                        "request_id": request_id,
-                                        "data": captured_excel_artifact
-                                    })
-                                elif evt_type == "weather":
-                                    captured_weather = d
-                                    await websocket.send_json({
-                                        "event": "weather",
-                                        "request_id": request_id,
-                                        "data": captured_weather
-                                    })
-                                elif evt_type == "citations":
-                                    captured_citations = d.get("citations", [])
-                                    await websocket.send_json({
-                                        "event": "citations",
-                                        "request_id": request_id,
-                                        "data": {"citations": captured_citations}
-                                    })
-                            except Exception as ex:
-                                logger.error(f"[WS Chat] Error parsing SSE payload for '{evt_type}': {ex}")
+                    chunk_str = sse_chunk.strip()
+                    if not chunk_str:
+                        continue
+                    evt_type = None
+                    payload_str = None
+                    if "\ndata:" in chunk_str:
+                        p1, p2 = chunk_str.split("\ndata:", 1)
+                        if p1.startswith("event:"):
+                            evt_type = p1[6:].strip()
+                        payload_str = p2.strip()
+                    elif chunk_str.startswith("data:"):
+                        evt_type = "token"
+                        payload_str = chunk_str[5:].strip()
+
+                    if evt_type and payload_str:
+                        try:
+                            d = json.loads(payload_str)
+                            if evt_type == "token":
+                                token_content = d.get("content", "")
+                                accumulated_tokens.append(token_content)
+                                await websocket.send_json({
+                                    "event": "token",
+                                    "request_id": request_id,
+                                    "data": {"content": token_content}
+                                })
+                            elif evt_type == "excel_artifact":
+                                captured_excel_artifact = d
+                                await websocket.send_json({
+                                    "event": "excel_artifact",
+                                    "request_id": request_id,
+                                    "data": captured_excel_artifact
+                                })
+                            elif evt_type == "document_artifact":
+                                captured_document_artifact = d
+                                await websocket.send_json({
+                                    "event": "document_artifact",
+                                    "request_id": request_id,
+                                    "data": captured_document_artifact
+                                })
+                            elif evt_type == "pdf_artifact":
+                                captured_pdf_artifact = d
+                                await websocket.send_json({
+                                    "event": "pdf_artifact",
+                                    "request_id": request_id,
+                                    "data": captured_pdf_artifact
+                                })
+                            elif evt_type == "weather":
+                                captured_weather = d
+                                await websocket.send_json({
+                                    "event": "weather",
+                                    "request_id": request_id,
+                                    "data": captured_weather
+                                })
+                            elif evt_type == "citations":
+                                captured_citations = d.get("citations", [])
+                                await websocket.send_json({
+                                    "event": "citations",
+                                    "request_id": request_id,
+                                    "data": {"citations": captured_citations}
+                                })
+                        except (RuntimeError, WebSocketDisconnect):
+                            logger.info("[WS Chat] Client disconnected during token stream.")
+                            client_disconnected = True
+                            break
+                        except Exception as ex:
+                            logger.error(f"[WS Chat] Error parsing SSE payload for '{evt_type}': {ex}")
 
                 # 8. Persist completed assistant message
                 full_reply = "".join(accumulated_tokens).strip()
@@ -322,31 +379,47 @@ async def websocket_chat_endpoint(websocket: WebSocket, token: Optional[str] = Q
                             router_badge=badge,
                             citations=captured_citations,
                             weather=captured_weather,
-                            excel_artifact=captured_excel_artifact
+                            excel_artifact=captured_excel_artifact,
+                            document_artifact=captured_document_artifact,
+                            pdf_artifact=captured_pdf_artifact
                         )
                         save_db.add(asst_msg)
                         await save_db.commit()
 
-                # Send 'complete' event
-                await websocket.send_json({
-                    "event": "complete",
-                    "request_id": request_id,
-                    "data": {
-                        "conversation_id": conversation_id,
-                        "token_count": len(accumulated_tokens)
-                    }
-                })
+                if client_disconnected:
+                    logger.info("[WS Chat] Cleanly exiting connection loop after client disconnect.")
+                    break
 
-            except asyncio.CancelledError:
-                logger.info("Client cancelled chat generation stream.")
+                # Send 'complete' event
+                try:
+                    await websocket.send_json({
+                        "event": "complete",
+                        "request_id": request_id,
+                        "data": {
+                            "conversation_id": conversation_id,
+                            "token_count": len(accumulated_tokens)
+                        }
+                    })
+                except (RuntimeError, WebSocketDisconnect):
+                    logger.info("[WS Chat] Client disconnected before complete event could be delivered.")
+                    break
+
+            except (WebSocketDisconnect, asyncio.CancelledError):
+                logger.info("WebSocket chat connection disconnected or cancelled.")
                 break
             except Exception as stream_err:
                 logger.error(f"Error during response generation: {stream_err}", exc_info=True)
-                await websocket.send_json({
-                    "event": "error",
-                    "request_id": request_id,
-                    "data": {"message": f"Generation error: {str(stream_err)}"}
-                })
+                if not client_disconnected:
+                    try:
+                        await websocket.send_json({
+                            "event": "error",
+                            "request_id": request_id,
+                            "data": {"message": f"Generation error: {str(stream_err)}"}
+                        })
+                    except Exception:
+                        break
+                else:
+                    break
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected normally.")
@@ -381,13 +454,37 @@ async def websocket_document_progress_endpoint(websocket: WebSocket, doc_id: str
                 "message": job.message if job else doc.status_message or doc.status
             })
 
-    # Queue for updates received from worker broadcast
+    # Queue for updates received from worker broadcast (in-memory + Redis pub/sub)
     queue = asyncio.Queue()
 
     def on_progress_event(event_dict):
         queue.put_nowait(event_dict)
 
     subscribe_progress(doc_id, on_progress_event)
+
+    # Redis pub/sub listener task
+    redis_task = None
+    try:
+        import redis.asyncio as aioredis
+        async def _redis_subscriber():
+            try:
+                r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+                pubsub = r.pubsub()
+                await pubsub.subscribe(f"ingest_progress:{doc_id}")
+                async for msg in pubsub.listen():
+                    if msg.get("type") == "message":
+                        try:
+                            payload = json.loads(msg.get("data", "{}"))
+                            queue.put_nowait(payload)
+                        except Exception:
+                            pass
+            except asyncio.CancelledError:
+                pass
+            except Exception as re:
+                logger.debug(f"Redis progress sub exception: {re}")
+        redis_task = asyncio.create_task(_redis_subscriber())
+    except Exception:
+        pass
 
     try:
         while True:
@@ -405,3 +502,5 @@ async def websocket_document_progress_endpoint(websocket: WebSocket, doc_id: str
         logger.info(f"WebSocket client disconnected from doc progress {doc_id}")
     finally:
         unsubscribe_progress(doc_id, on_progress_event)
+        if redis_task:
+            redis_task.cancel()

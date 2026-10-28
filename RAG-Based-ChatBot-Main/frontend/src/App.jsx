@@ -19,6 +19,7 @@ import HistoryModal from "./components/Chat/HistoryModal";
 import ProjectsModal from "./components/Projects/ProjectsModal";
 import AdminPasswordModal from "./components/Auth/AdminPasswordModal";
 import HelpModal from "./components/Help/HelpModal";
+import PdfToolsModal from "./components/Tools/PdfToolsModal";
 
 export default function App() {
   // Theme State
@@ -122,6 +123,10 @@ export default function App() {
 
   // Real-Web Mode State
   const [webMode, setWebMode] = useState(false);
+
+  // PDF Tools Workstation State
+  const [pdfToolsOpen, setPdfToolsOpen] = useState(false);
+  const [pdfToolsInitialOp, setPdfToolsInitialOp] = useState("merge");
 
   // User State
   const [currentUser, setCurrentUser] = useState(() => {
@@ -555,6 +560,11 @@ export default function App() {
                 : d
             )
           );
+          setActiveDoc((prev) =>
+            prev && prev.id === uploadedDoc.id
+              ? { ...prev, status: progressEvent.status, status_message: progressEvent.message }
+              : prev
+          );
         },
         () => {
           loadDocuments();
@@ -647,6 +657,55 @@ export default function App() {
     setViewMode("split");
   };
 
+  // Preview generated PDF artifact in side PDF viewer
+  const handlePreviewGeneratedPdf = (artifact) => {
+    if (!artifact) return;
+    const docStub = {
+      id: artifact.id || artifact.artifact_id || artifact.filename,
+      filename: artifact.filename,
+      file_type: "pdf",
+      pdf_path: artifact.file_path,
+      download_url: artifact.download_url
+    };
+    setActiveDoc(docStub);
+    setCurrentPage(1);
+    setActiveHighlights([]);
+    setFocusedCitation(null);
+    setViewMode("split");
+  };
+
+  // Central Tool Selection Dispatcher
+  const handleSelectTool = (toolId, defaultPrompt) => {
+    if (toolId === "pdf_tools") {
+      setPdfToolsOpen(true);
+      setToolsOpen(false);
+      return;
+    }
+    if (toolId === "web_search") {
+      setWebMode(true);
+      if (defaultPrompt) setInputMessage(defaultPrompt);
+      setToolsOpen(false);
+      return;
+    }
+    if (toolId === "create_document" || toolId === "doc_generator") {
+      setInputMessage(defaultPrompt || "Generate a professional PDF executive summary report.");
+      setToolsOpen(false);
+      return;
+    }
+    if (toolId === "excel_generator") {
+      setInputMessage(defaultPrompt || "Generate an Excel workbook with data analysis.");
+      setToolsOpen(false);
+      return;
+    }
+    if (defaultPrompt) {
+      setInputMessage(defaultPrompt);
+      setToolsOpen(false);
+      return;
+    }
+    setActiveToolModal({ isOpen: true, toolId });
+    setToolsOpen(false);
+  };
+
   // Chat sending via WebSocket (supports Real-Web Mode and direct tool execution)
   const handleSendMessage = (explicitText = null) => {
     const text = (typeof explicitText === "string" ? explicitText : inputMessage).trim();
@@ -664,12 +723,15 @@ export default function App() {
     };
     const isWeatherQuery = /\b(weather|temperature|forecast|rainfall|umbrella|humidity|wind\s+speed|precipitat|how\s+(?:hot|cold|warm)|is\s+it\s+(?:raining|sunny|cloudy|snowing)|rain\s+in|snow\s+in)\b/i.test(text);
     const isExcelGenQuery = /\b(create|generate|export|build|prepare|make|produce)\b.*\b(excel|sheet|spreadsheet|workbook|\.?xlsx?|\d+\s*(?:data\s*)?rows?|\d+\s*columns?|test\s*cases?)/i.test(text);
+    const isDocGenQuery = /\b(create|generate|export|build|prepare|make|produce|write|draft)\b.*\b(docx|word|pdf|text\s+file|text\s+document|\.?txt|markdown|\.?md|project\s+report|technical\s+report|business\s+report|meeting\s+minutes|action\s+items|project\s+proposal|resume|curriculum\s+vitae|\bcv\b|cover\s+letter|technical\s+doc|user\s+manual|srs|prd|test\s+plan|document)/i.test(text);
+    const isPdfToolQuery = /\b(merge|split|rotate|compress|extract\s+pages|pdf\s+to\s+(?:text|markdown)|extract\s+(?:pdf\s+)?tables|watermark|page\s+numbers?)\b/i.test(text);
+    const isGreeting = /^(hi|hello|hey|good\s+(morning|afternoon|evening)|howdy|sup|who\s+are\s+you|help|thanks|thank\s+you)[.?!]*$/i.test(text.trim());
     const tempAsstId = `asst_${Date.now()}`;
     const tempAsstMsg = {
       id: tempAsstId,
       role: "assistant",
       content: "",
-      router_badge: isWeatherQuery ? "⛅ Live Weather" : (isExcelGenQuery ? "📊 Excel Generator" : (webMode ? "🌐 Live Web Search" : null)),
+      router_badge: isWeatherQuery ? "⛅ Live Weather" : (isExcelGenQuery ? "📊 Excel Generator" : (isDocGenQuery ? "📝 Document Generator" : (isPdfToolQuery ? "🛠️ PDF Tools" : ((webMode && !isGreeting) ? "🌐 Live Web Search" : null)))),
       citations: [],
       weather: null,
       created_at: new Date().toISOString()
@@ -686,12 +748,13 @@ export default function App() {
       : (documents && documents.length > 0 ? documents.map((d) => d.id) : null);
 
     let accumulatedText = "";
+    let hasSpecialContent = false;
     let isCleanedUp = false;
 
-    // Safety timeout: 120 seconds max to prevent infinite loading dots
+    // Safety timeout: 180 seconds max to prevent infinite loading dots on CPU inference
     const safetyTimer = setTimeout(() => {
       if (!isCleanedUp) {
-        if (!accumulatedText) {
+        if (!accumulatedText && !hasSpecialContent) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === tempAsstId
@@ -707,7 +770,7 @@ export default function App() {
         setIsGenerating(false);
         cleanup();
       }
-    }, 120000);
+    }, 180000);
 
     const unregToken = chatWs.on("token", (data) => {
       accumulatedText += data.content || "";
@@ -727,6 +790,7 @@ export default function App() {
     });
 
     const unregWeather = chatWs.on("weather", (data) => {
+      hasSpecialContent = true;
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempAsstId
@@ -737,10 +801,33 @@ export default function App() {
     });
 
     const unregExcel = chatWs.on("excel_artifact", (data) => {
+      hasSpecialContent = true;
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempAsstId
             ? { ...m, excel_artifact: data, router_badge: "📊 Excel Generator" }
+            : m
+        )
+      );
+    });
+
+    const unregDoc = chatWs.on("document_artifact", (data) => {
+      hasSpecialContent = true;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempAsstId
+            ? { ...m, document_artifact: data, router_badge: "📝 Document Generator" }
+            : m
+        )
+      );
+    });
+
+    const unregPdf = chatWs.on("pdf_artifact", (data) => {
+      hasSpecialContent = true;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempAsstId
+            ? { ...m, pdf_artifact: data, router_badge: "🛠️ PDF Tools" }
             : m
         )
       );
@@ -843,6 +930,8 @@ export default function App() {
       unregStart();
       unregWeather();
       unregExcel();
+      unregDoc();
+      unregPdf();
       unregRenamed();
       unregCitations();
       unregComplete();
@@ -864,14 +953,6 @@ export default function App() {
 
   const handleStopGenerating = () => {
     setIsGenerating(false);
-  };
-
-  // Tool Selection from Popover
-  const handleSelectTool = (toolId) => {
-    if (toolId === "web_search") {
-      setWebMode(true);
-    }
-    setActiveToolModal({ isOpen: true, toolId });
   };
 
   // Insert tool result into chat
@@ -962,6 +1043,7 @@ export default function App() {
             currentUser={currentUser}
             onRequestAdminMode={handleRequestAdminMode}
             onSwitchToUserMode={handleSwitchToUserMode}
+            onOpenPdfTools={() => setPdfToolsOpen(true)}
           />
 
           {/* Split Panes Container */}
@@ -980,6 +1062,7 @@ export default function App() {
                   isGenerating={isGenerating}
                   onCitationClick={handleCitationClick}
                   onQuickPromptClick={(prompt) => setInputMessage(prompt)}
+                  onPreviewInViewer={handlePreviewGeneratedPdf}
                   activeDoc={activeDoc}
                 />
 
@@ -1124,6 +1207,16 @@ export default function App() {
       <HelpModal
         isOpen={helpOpen}
         onClose={() => setHelpOpen(false)}
+      />
+
+      {/* PDF Tools Workstation Modal */}
+      <PdfToolsModal
+        isOpen={pdfToolsOpen}
+        onClose={() => setPdfToolsOpen(false)}
+        documents={documents}
+        activeDoc={activeDoc}
+        onPreviewInViewer={handlePreviewGeneratedPdf}
+        initialOperation={pdfToolsInitialOp}
       />
     </div>
   );

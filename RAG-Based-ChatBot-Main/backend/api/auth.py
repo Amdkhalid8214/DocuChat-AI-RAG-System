@@ -83,7 +83,7 @@ async def create_user_session(user_id: str, db: AsyncSession, username: str = ""
     session_obj = UserSessionModel(
         token=token,
         user_id=user_id,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None)
     )
     db.add(session_obj)
     await db.commit()

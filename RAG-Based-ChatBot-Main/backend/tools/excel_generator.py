@@ -18,16 +18,24 @@ import logging
 from contextvars import ContextVar
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
+from datetime import datetime, date
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.chart import BarChart, PieChart, LineChart, Reference, Series
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.formatting.rule import CellIsRule
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 from backend.config import settings
 from backend.tools.artifact_registry import artifact_registry
 from backend.tools.excel_parser import parse_excel_generation_request, ParsedExcelRequest
+from backend.tools.benchmark_dashboard_2026 import (
+    generate_sales_performance_dashboard_2026,
+    validate_benchmark_workbook
+)
 from backend.tools.dynamic_data_generator import (
     get_columns_for_dataset,
     generate_row_for_dataset,
@@ -40,13 +48,20 @@ logger = logging.getLogger("excel_generator")
 active_excel_artifact: ContextVar[Optional[Dict[str, Any]]] = ContextVar("active_excel_artifact", default=None)
 
 
-def sanitize_cell_value(val: Any) -> Any:
+def sanitize_cell_value(val: Any, allow_formula: bool = False) -> Any:
     """
     Prevents spreadsheet formula injection (CWE-1236).
     If a cell value starts with '=', '+', '-', '@', tab, or carriage return,
     prepend an apostrophe to force Excel to treat it as a literal string.
+    If allow_formula is True and val starts with '=', preserves intentional formulas
+    while strictly blocking malicious DDE execution commands (e.g. =cmd|'...).
     """
     if isinstance(val, str) and val:
+        if allow_formula and val.startswith("="):
+            # Block known DDE command execution payloads
+            if re.search(r"^=(?:cmd|powershell|mshta|wscript|cscript|regsvr32)\b", val, re.I):
+                return f"'{val}"
+            return val
         first_char = val[0]
         if first_char in ('=', '+', '-', '@', '\t', '\r'):
             return f"'{val}"
@@ -2226,6 +2241,18 @@ async def generate_workbook_from_request(
                 logger.info(f"[EXCEL_GEN] Grounded domain specs via live web search: {len(web_results)} results.")
         except Exception as e:
             logger.warning(f"[EXCEL_GEN] Web search lookup skipped: {e}")
+
+    # ROUTE 0: Phase 4 Benchmark - Sales Performance Analysis Dashboard — 2026
+    if parsed.dataset_type == "sales_dashboard_2026" or re.search(r"\b(sales\s+performance\s+analysis\s+dashboard|sales\s+dashboard|sales.*2026)\b", clean_p, re.I):
+        artifact = generate_sales_performance_dashboard_2026(
+            artifact_id=art_id,
+            generation_request_id=gen_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            unique_filename=unique_filename
+        )
+        active_excel_artifact.set(artifact)
+        return artifact
 
     # ROUTE 1: Tabular Synthetic / Real Data Generation (e.g. cricket players, politicians, student data)
     if not parsed.is_qa:

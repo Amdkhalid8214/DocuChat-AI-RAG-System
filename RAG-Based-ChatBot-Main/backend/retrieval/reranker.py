@@ -1,5 +1,6 @@
 import logging
 import math
+import threading
 from typing import List, Dict, Any
 from backend.config import settings
 
@@ -10,18 +11,26 @@ class Reranker:
         self.model_name = settings.RERANKER_MODEL
         self.enabled = settings.USE_RERANKER
         self._model = None
+        self._lock = threading.Lock()
 
     def _get_model(self):
         if self._model is None and self.enabled:
-            try:
-                from sentence_transformers import CrossEncoder
-                import torch
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                logger.info(f"Loading CrossEncoder reranker model: {self.model_name} on device: {device}")
-                self._model = CrossEncoder(self.model_name, max_length=512, device=device)
-            except Exception as e:
-                logger.warning(f"Could not load CrossEncoder model {self.model_name} ({e}). Falling back to fusion scores.")
-                self.enabled = False
+            with self._lock:
+                if self._model is None and self.enabled:
+                    try:
+                        from sentence_transformers import CrossEncoder
+                        import torch
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                        logger.info(f"Loading CrossEncoder reranker model: {self.model_name} on device: {device}")
+                        self._model = CrossEncoder(
+                            self.model_name,
+                            max_length=512,
+                            device=device,
+                            model_kwargs={"low_cpu_mem_usage": False}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not load CrossEncoder model {self.model_name} ({e}). Falling back to fusion scores.")
+                        self.enabled = False
         return self._model
 
     def rerank(

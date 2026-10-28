@@ -167,6 +167,17 @@ async def chat_endpoint(
     else:
         active_excel_context.set(None)
 
+    from backend.tools.searxng_search import active_web_citations
+    from backend.tools.weather import active_weather_data
+    from backend.tools.excel_generator import active_excel_artifact
+    from backend.tools.document_generator import active_document_artifact
+    from backend.tools.pdf_tools import active_pdf_artifact
+    active_web_citations.set([])
+    active_weather_data.set(None)
+    active_excel_artifact.set(None)
+    active_document_artifact.set(None)
+    active_pdf_artifact.set(None)
+
     # 5. Route Query via centralized QueryRouter (ensures Excel generation takes priority in every mode)
     web_mode = bool(req.web_mode)
     router_instance = query_router
@@ -187,8 +198,9 @@ async def chat_endpoint(
 
     from backend.llm.router import DOC_EXPLICIT_REGEX
     is_doc_excel = (route == "excel_generation" and has_documents and bool(DOC_EXPLICIT_REGEX.search(req.message)))
+    is_doc_gen = (route == "document_generation")
 
-    if route == "document" or is_doc_excel:
+    if route == "document" or is_doc_excel or (is_doc_gen and has_documents):
         # Multi-query transformation
         queries = await query_rewriter.transform_query(req.message, history_dicts)
         
@@ -208,6 +220,8 @@ async def chat_endpoint(
         captured_citations = []
         captured_weather = None
         captured_excel_artifact = None
+        captured_document_artifact = None
+        captured_pdf_artifact = None
 
         async for sse_chunk in grounded_generator.stream_rag_response(
             question=req.message,
@@ -221,34 +235,36 @@ async def chat_endpoint(
             conversation_id=conv_id,
         ):
             # Intercept events for DB storage
-            lines = sse_chunk.strip().split("\n")
-            for line in lines:
-                if line.startswith("event:"):
-                    event_type = line[6:].strip()
-                elif line.startswith("data:"):
-                    payload_str = line[5:].strip()
-                    if event_type == "token":
-                        try:
-                            d = json.loads(payload_str)
+            chunk_str = sse_chunk.strip()
+            if chunk_str:
+                event_type = None
+                payload_str = None
+                if "\ndata:" in chunk_str:
+                    p1, p2 = chunk_str.split("\ndata:", 1)
+                    if p1.startswith("event:"):
+                        event_type = p1[6:].strip()
+                    payload_str = p2.strip()
+                elif chunk_str.startswith("data:"):
+                    event_type = "token"
+                    payload_str = chunk_str[5:].strip()
+
+                if event_type and payload_str:
+                    try:
+                        d = json.loads(payload_str)
+                        if event_type == "token":
                             accumulated_text.append(d.get("content", ""))
-                        except Exception:
-                            pass
-                    elif event_type == "excel_artifact":
-                        try:
-                            captured_excel_artifact = json.loads(payload_str)
-                        except Exception as e:
-                            logger.error(f"Error parsing excel_artifact in chat.py: {e}")
-                    elif event_type == "weather":
-                        try:
-                            captured_weather = json.loads(payload_str)
-                        except Exception:
-                            pass
-                    elif event_type == "citations":
-                        try:
-                            d = json.loads(payload_str)
+                        elif event_type == "excel_artifact":
+                            captured_excel_artifact = d
+                        elif event_type == "document_artifact":
+                            captured_document_artifact = d
+                        elif event_type == "pdf_artifact":
+                            captured_pdf_artifact = d
+                        elif event_type == "weather":
+                            captured_weather = d
+                        elif event_type == "citations":
                             captured_citations = d.get("citations", [])
-                        except Exception:
-                            pass
+                    except Exception:
+                        pass
 
             yield sse_chunk
 
@@ -264,7 +280,9 @@ async def chat_endpoint(
                         router_badge=badge,
                         citations=captured_citations,
                         weather=captured_weather,
-                        excel_artifact=captured_excel_artifact
+                        excel_artifact=captured_excel_artifact,
+                        document_artifact=captured_document_artifact,
+                        pdf_artifact=captured_pdf_artifact
                     )
                     save_session.add(asst_msg)
                     await save_session.commit()

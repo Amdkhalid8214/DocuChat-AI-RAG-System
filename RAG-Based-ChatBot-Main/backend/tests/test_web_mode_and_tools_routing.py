@@ -205,3 +205,63 @@ async def test_web_mode_stream_rag_response_end_to_end():
 
         # 5. Done event
         assert "event: done" in combined
+
+
+@pytest.mark.asyncio
+async def test_cross_turn_excel_artifact_isolation():
+    """
+    Verifies that if a previous turn created an Excel artifact,
+    a subsequent Document QA query in the same task/thread context cleanly resets
+    active_excel_artifact and NEVER emits an 'excel_artifact' event or Excel badge.
+    """
+    from backend.tools.excel_generator import active_excel_artifact
+    # Simulate stale artifact left over from previous Excel workbook generation turn
+    active_excel_artifact.set({
+        "status": "success",
+        "filename": "cricket_players_909a155a.xlsx",
+        "file_path": "data/generated_excel/cricket_players_909a155a.xlsx",
+        "rows": 5,
+        "columns": 5
+    })
+
+    generator = GroundedGenerator()
+    chunks = [
+        {
+            "chunk_id": "c1",
+            "doc_id": "doc1",
+            "filename": "Production_Guide.pdf",
+            "page": 1,
+            "text": "Qdrant Vector DataBase is used for advanced RAG vector storage.",
+            "bboxes": [{"page": 1, "x0": 10, "y0": 20, "x1": 100, "y1": 40, "text": "Qdrant Vector DataBase"}]
+        }
+    ]
+
+    async def mock_stream_tokens(*args, **kwargs):
+        yield "Qdrant Vector DataBase is used for vector storage."
+
+    with patch("backend.llm.langchain_adapter.langchain_adapter.stream_grounded_chat") as mock_grounded:
+        mock_grounded.return_value = (mock_stream_tokens(), [{"source_index": 1, "filename": "Production_Guide.pdf", "page": 1, "bboxes": []}])
+
+        events = []
+        async for chunk in generator.stream_rag_response(
+            question="What is Qdrant Vector DataBase and why was it chosen over alternatives like chroma or Milvus",
+            route="document",
+            router_badge="From document",
+            retrieved_chunks=chunks,
+            queries=["What is Qdrant Vector DataBase"],
+            web_mode=False
+        ):
+            events.append(chunk)
+
+        combined = "".join(events)
+
+        # 1. Excel artifact must NOT be emitted
+        assert "event: excel_artifact" not in combined
+        assert "cricket_players" not in combined
+
+        # 2. Excel Generator badge must NOT be present
+        assert "Excel Generator" not in combined
+        assert "From document" in combined
+
+        # 3. ContextVar must be reset to None
+        assert active_excel_artifact.get() is None

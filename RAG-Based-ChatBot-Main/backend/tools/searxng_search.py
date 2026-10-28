@@ -205,6 +205,8 @@ async def search_searxng_async(
     and inspects readable page content with SSRF defenses.
     """
     endpoint = searxng_url or getattr(settings, "SEARXNG_URL", "http://127.0.0.1:8080/search")
+    if not endpoint.rstrip("/").endswith("/search"):
+        endpoint = endpoint.rstrip("/") + "/search"
     req_timeout = timeout or min(getattr(settings, "SEARXNG_TIMEOUT", 3.5), 3.5)
     limit = max(1, min(10, max_results or getattr(settings, "SEARXNG_MAX_RESULTS", 5)))
 
@@ -229,7 +231,7 @@ async def search_searxng_async(
 
     # 1. Query SearXNG endpoint
     try:
-        async with httpx.AsyncClient(timeout=req_timeout) as client:
+        async with httpx.AsyncClient(timeout=req_timeout, follow_redirects=True) as client:
             resp = await client.get(endpoint, params=params, headers=headers)
             resp.raise_for_status()
 

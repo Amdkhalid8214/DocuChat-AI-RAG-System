@@ -34,6 +34,9 @@ class PaddleOCREngine:
         if self._engine_type is not None or self._init_error is not None:
             return
 
+        err1 = "not installed"
+        err2 = "not installed"
+
         # 1. Attempt Native PaddleOCR
         try:
             from paddleocr import PaddleOCR
@@ -42,7 +45,8 @@ class PaddleOCREngine:
             logger.info("PaddleOCREngine: Initialized native PaddleOCR successfully.")
             return
         except Exception as e1:
-            logger.debug(f"Native PaddleOCR unavailable ({e1}). Checking ONNX PP-OCR runtime...")
+            err1 = str(e1)
+            logger.debug(f"Native PaddleOCR unavailable ({err1}). Checking ONNX PP-OCR runtime...")
 
         # 2. Attempt RapidOCR ONNX Runtime (PaddleOCR PP-OCRv4 ONNX model)
         try:
@@ -52,10 +56,11 @@ class PaddleOCREngine:
             logger.info("PaddleOCREngine: Initialized RapidOCR (PP-OCRv4 ONNX) successfully.")
             return
         except Exception as e2:
-            logger.debug(f"RapidOCR ONNX unavailable ({e2}).")
+            err2 = str(e2)
+            logger.debug(f"RapidOCR ONNX unavailable ({err2}).")
 
         # 3. If host environment restricts native DLLs (e.g. Windows Application Control)
-        self._init_error = f"PaddleOCR native and ONNX runtimes restricted or uninstalled (Paddle: {e1}, ONNX: {e2})"
+        self._init_error = f"PaddleOCR native and ONNX runtimes restricted or uninstalled (Paddle: {err1}, ONNX: {err2})"
         self._engine_type = "fallback_mockable"
         logger.warning(
             f"PaddleOCREngine: Host environment restricted OCR C-extensions ({self._init_error}). "

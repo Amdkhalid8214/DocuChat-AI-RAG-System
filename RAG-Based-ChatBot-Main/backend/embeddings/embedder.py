@@ -1,4 +1,5 @@
 import logging
+import threading
 import requests
 from typing import List
 from backend.config import settings
@@ -10,36 +11,43 @@ class EmbeddingService:
         self.model_name = settings.EMBEDDING_MODEL
         self._fastembed_model = None
         self._st_model = None
+        self._lock = threading.Lock()
 
     def _get_fastembed(self):
         if self._fastembed_model is None:
-            try:
-                from fastembed import TextEmbedding
-                # Normalize model name for FastEmbed
-                mname = self.model_name
-                if "nomic" in mname.lower():
-                    mname = "nomic-ai/nomic-embed-text-v1.5"
-                elif "bge-small" in mname.lower() or not mname:
-                    mname = "BAAI/bge-small-en-v1.5"
+            with self._lock:
+                if self._fastembed_model is None:
+                    try:
+                        from fastembed import TextEmbedding
+                        mname = self.model_name
+                        if "nomic" in mname.lower():
+                            mname = "nomic-ai/nomic-embed-text-v1.5"
+                        elif "bge-small" in mname.lower() or not mname:
+                            mname = "BAAI/bge-small-en-v1.5"
 
-                try:
-                    logger.info(f"Loading FastEmbed model: {mname}")
-                    self._fastembed_model = TextEmbedding(model_name=mname)
-                except Exception as inner_e:
-                    logger.warning(f"FastEmbed failed with {mname} ({inner_e}), falling back to BAAI/bge-small-en-v1.5")
-                    self._fastembed_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-            except Exception as e:
-                logger.warning(f"Could not load FastEmbed ({e}).")
+                        try:
+                            logger.info(f"Loading FastEmbed model: {mname}")
+                            self._fastembed_model = TextEmbedding(model_name=mname)
+                        except Exception as inner_e:
+                            logger.warning(f"FastEmbed failed with {mname} ({inner_e}), falling back to BAAI/bge-small-en-v1.5")
+                            self._fastembed_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+                    except Exception as e:
+                        logger.warning(f"Could not load FastEmbed ({e}).")
         return self._fastembed_model
 
     def _get_st_model(self):
         if self._st_model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-                logger.info(f"Loading SentenceTransformer embedding model: {self.model_name}")
-                self._st_model = SentenceTransformer(self.model_name)
-            except Exception as e:
-                logger.warning(f"Could not load SentenceTransformer ({e}).")
+            with self._lock:
+                if self._st_model is None:
+                    try:
+                        from sentence_transformers import SentenceTransformer
+                        logger.info(f"Loading SentenceTransformer embedding model: {self.model_name}")
+                        self._st_model = SentenceTransformer(
+                            self.model_name,
+                            model_kwargs={"low_cpu_mem_usage": False}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not load SentenceTransformer ({e}).")
         return self._st_model
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:

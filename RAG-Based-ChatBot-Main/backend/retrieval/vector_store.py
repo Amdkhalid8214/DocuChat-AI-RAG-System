@@ -1,6 +1,7 @@
 import os
+import uuid
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.http import models as qmodels
@@ -12,6 +13,20 @@ from backend.chunking.structure_chunker import Chunk
 
 logger = logging.getLogger(__name__)
 
+def _ensure_valid_qdrant_id(raw_id: Any) -> Union[int, str]:
+    """
+    Ensure the ID passed to Qdrant PointStruct conforms to Qdrant requirements:
+    an unsigned integer (>= 0) or an RFC 4122 UUID string.
+    Arbitrary strings like 'p20_c1' are deterministically mapped to UUID v5.
+    """
+    if isinstance(raw_id, int) and raw_id >= 0:
+        return raw_id
+    id_str = str(raw_id).strip()
+    try:
+        return str(uuid.UUID(id_str))
+    except (ValueError, AttributeError):
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, id_str))
+
 class VectorStore:
     def __init__(self):
         self.collection_name = settings.QDRANT_COLLECTION
@@ -21,12 +36,17 @@ class VectorStore:
     def _init_client(self):
         if not QdrantClient:
             return
-        # Try remote Qdrant first with a short timeout
+        # Test remote Qdrant with a short, non-blocking check
         try:
-            client = QdrantClient(url=settings.QDRANT_URL, timeout=3)
-            client.get_collections()
-            self.client = client
-            logger.info(f"Connected to Qdrant service at {settings.QDRANT_URL}")
+            import httpx
+            with httpx.Client(timeout=1.5) as hclient:
+                res = hclient.get(f"{settings.QDRANT_URL}/collections")
+                if res.status_code == 200:
+                    client = QdrantClient(url=settings.QDRANT_URL, timeout=3)
+                    self.client = client
+                    logger.info(f"Connected to Qdrant service at {settings.QDRANT_URL}")
+                else:
+                    self._use_local_storage(f"Remote Qdrant returned status {res.status_code}")
         except Exception as e:
             self._use_local_storage(f"Remote Qdrant unavailable: {e}")
 
@@ -65,8 +85,9 @@ class VectorStore:
 
         points = []
         for chunk, vector in zip(chunks, vectors):
+            point_id = _ensure_valid_qdrant_id(chunk.chunk_id)
             points.append(qmodels.PointStruct(
-                id=chunk.chunk_id,
+                id=point_id,
                 vector=vector,
                 payload={
                     "chunk_id": chunk.chunk_id,
@@ -87,6 +108,10 @@ class VectorStore:
                 wait=True
             )
         except Exception as e:
+            err_str = str(e).lower()
+            if "format error" in err_str or "bad request" in err_str or "validation" in err_str:
+                logger.error(f"Qdrant validation error during upsert: {e}")
+                return
             logger.warning(f"Qdrant upsert failed ({e}). Attempting local storage fallback...")
             self._use_local_storage(str(e))
             try:
@@ -141,6 +166,10 @@ class VectorStore:
         try:
             results = _do_search(self.client)
         except Exception as e:
+            err_str = str(e).lower()
+            if "format error" in err_str or "validation" in err_str:
+                logger.warning(f"Qdrant search validation error: {e}")
+                return []
             logger.warning(f"Qdrant search failed ({e}). Retrying with local storage...")
             self._use_local_storage(str(e))
             try:

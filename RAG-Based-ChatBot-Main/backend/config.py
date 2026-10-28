@@ -11,7 +11,12 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     HOST: str = "0.0.0.0"
     PORT: int = 5000
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001"
+    ]
 
     # Security & Auth
     SECRET_KEY: str = os.getenv("SECRET_KEY", "docuchat-production-secret-key-change-in-env-998877")
@@ -42,14 +47,14 @@ class Settings(BaseSettings):
     # Docling Parser
     DOCLING_URL: str = "http://localhost:5001"
 
-    # LLM Settings (Ollama with verified Qwen 2.5 3B)
+    # LLM Settings (Ollama with verified Qwen 2.5 7B)
     LLM_BASE_URL: str = "http://127.0.0.1:11434"
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "qwen2.5:3b")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "qwen2.5:1.5b")
     LLM_TEMPERATURE: float = 0.0
-    LLM_MAX_TOKENS: int = 2048
+    LLM_MAX_TOKENS: int = 512
     LLM_TIMEOUT: float = 180.0
-    LLM_NUM_THREADS: int = 8
-    LLM_NUM_CTX: int = 4096
+    LLM_NUM_THREADS: int = int(os.getenv("LLM_NUM_THREADS", "2"))
+    LLM_NUM_CTX: int = int(os.getenv("LLM_NUM_CTX", "4096"))
     ENABLE_GROUNDING_VALIDATION: bool = os.getenv("ENABLE_GROUNDING_VALIDATION", "false").lower() in ("true", "1", "yes")
     MAX_VALIDATION_RETRIES: int = int(os.getenv("MAX_VALIDATION_RETRIES", "1"))
     CONTEXT_BUDGET_TOKENS: int = 2048
@@ -77,8 +82,8 @@ class Settings(BaseSettings):
     RRF_K: int = 60
     FUSION_ALPHA: float = 0.5
     DEDUP_SIMILARITY_THRESHOLD: float = 0.88
-    FINAL_TOP_K: int = 5
-    SCORE_THRESHOLD: float = 0.20
+    FINAL_TOP_K: int = int(os.getenv("FINAL_TOP_K", "4"))
+    SCORE_THRESHOLD: float = float(os.getenv("SCORE_THRESHOLD", "0.25"))
 
     # Chunking & Tokenizer Limits
     CHUNK_TARGET_TOKENS: int = 400

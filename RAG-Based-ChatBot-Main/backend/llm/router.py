@@ -128,8 +128,10 @@ EXCEL_INFO_REGEX = re.compile(
 )
 
 EXCEL_GEN_PATTERNS = [
-    # Explicit file format generation (excel, spreadsheet, workbook, xlsx, xls, csv)
-    r"\b(?:create|generate|export|build|prepare|make|produce|write)\b.*\b(?:excel|spreadsheet|workbook|\.?xlsx?|\.?csv)\b",
+    # Explicit file format generation (excel, spreadsheet, workbook, dashboard, xlsx, xls, csv)
+    r"\b(?:create|generate|export|build|prepare|make|produce|write)\b.*\b(?:excel|spreadsheet|workbook|dashboard|\.?xlsx?|\.?csv)\b",
+    # Benchmark and dashboard requests
+    r"\b(?:sales\s+performance\s+analysis\s+dashboard|sales\s+dashboard\s+2026|sales\s+dashboard|benchmark\s+dashboard)\b",
     # Test data / test case generation
     r"\b(?:create|generate|build|prepare|make|produce)\b.*\b(?:test\s+data|test\s+cases?|test\s+suite|test\s+scenarios?)\b",
     # Conversion into Excel / spreadsheet
@@ -138,8 +140,8 @@ EXCEL_GEN_PATTERNS = [
     r"\b(?:downloadable|exportable)\s+(?:excel|spreadsheet|workbook|sheet|\.?xlsx?|\.?csv)\b",
     # "excel/spreadsheet sheet/workbook for/with/containing"
     r"\b(?:excel|spreadsheet)\s+(?:sheet|workbook|file)\s+(?:for|with|containing|about)\b",
-    # "create/generate a [optional words] sheet/spreadsheet/workbook"
-    r"\b(?:create|generate|provide|give\s+me)\s+(?:a|an)?\s*(?:[a-zA-Z0-9_\-]+\s+){0,4}(?:excel\s+)?(?:sheet|spreadsheet|workbook|table)\b",
+    # "create/generate a [optional words] sheet/spreadsheet/workbook/dashboard"
+    r"\b(?:create|generate|provide|give\s+me)\s+(?:a|an|the)?\s*(?:[a-zA-Z0-9_\-—–\s]+){0,6}(?:excel\s+)?(?:sheet|spreadsheet|workbook|data\s+table|table(?!\s+of\s+contents)|dashboard)\b",
     # Structured tabular data requests without explicitly naming excel:
     # e.g. "Generate 50 student records with 12 columns"
     # e.g. "Generate 4 roms and 4 columns of cricket players"
@@ -154,6 +156,24 @@ EXCEL_GEN_PATTERNS = [
 EXCEL_GEN_REGEX = re.compile("|".join(EXCEL_GEN_PATTERNS), re.IGNORECASE)
 
 
+FORMULA_EXPLAIN_REGEX = re.compile(
+    r"\b(?:explain|how\s+does|what\s+does|break\s*down|syntax\s+of|tutorial\s+on)\b.*\b(?:formula|function|xlookup|vlookup|iferror|index\s*match|sumifs?|countifs?|averageifs?|=|\bif\b|\bsum\b)\b|"
+    r"\bexplain\s+(?:the\s+)?(?:excel\s+)?formula\b|"
+    r"^=(?:[A-Z_]+)\(.*\)$",
+    re.IGNORECASE
+)
+
+
+def is_excel_formula_explanation(question: str) -> bool:
+    """
+    Identifies requests to explain Excel formulas, syntax, functions, or expressions.
+    These are answered directly with educational explanations rather than generating workbooks.
+    """
+    if not question:
+        return False
+    return bool(FORMULA_EXPLAIN_REGEX.search(question.strip()))
+
+
 def is_excel_generation_request(question: str) -> bool:
     """
     Identifies requests to generate, create, build, or export real Excel (.xlsx) workbooks,
@@ -163,11 +183,118 @@ def is_excel_generation_request(question: str) -> bool:
     if not question:
         return False
     q = question.strip()
+    if is_excel_formula_explanation(q):
+        return False
     if EXCEL_INFO_REGEX.search(q):
         return False
+    # If the user explicitly asks for document formats or types without mentioning excel/spreadsheet
+    if re.search(r"\b(docx|pdf|\.?docx?|\.?pdf|report|resume|cv|proposal|document|doc|minutes|cover\s+letter|srs|prd|test\s+plan)\b", q, re.I):
+        if not re.search(r"\b(excel|spreadsheet|workbook|\.?xlsx?|\.?csv)\b", q, re.I):
+            return False
     if EXCEL_ANALYSIS_REGEX.search(q) and not re.search(r"\b(create|generate|export|build|prepare|make|produce|convert)\b", q, re.I):
         return False
     return bool(EXCEL_GEN_REGEX.search(q))
+
+
+DOC_GEN_PATTERNS = [
+    # Explicit document formats with creation verbs
+    r"\b(?:create|generate|export|build|prepare|make|produce|write|draft)\b.*\b(?:docx|word\s+doc|word\s+document|\.?docx?|pdf|text\s+file|text\s+document|\.?txt|markdown\s+document|\.?md)\b",
+    # Conversion into docx/pdf/txt/md
+    r"\b(?:convert|turn)\b.*\b(?:into|to)\b.*\b(?:docx|word|pdf|text|markdown|\.?docx?|\.?pdf|\.?txt|\.?md)\b",
+    # Specific document types with creation verbs
+    r"\b(?:create|generate|build|prepare|make|produce|write|draft)\b.*\b(?:project\s+report|technical\s+report|business\s+report|meeting\s+minutes|minutes\s+of\s+meeting|action\s+items|meeting\s+report|project\s+proposal|grant\s+proposal|resume|curriculum\s+vitae|\bcv\b|cover\s+letter|technical\s+(?:doc|document|documentation)|architecture\s+document|user\s+manual|user\s+guide|how[- ]to\s+guide|requirement\s+specifications?|\bsrs\b|\bprd\b|test\s+plan|qa\s+plan|formal\s+notice|standard\s+letter|research\s+summary)\b",
+    # "Create a document based on / from / using ..."
+    r"\b(?:create|generate|write|draft|build|produce)\s+(?:a|an)?\s*(?:new\s+)?document\b",
+    # "Downloadable / exportable document / report / pdf / docx"
+    r"\b(?:downloadable|exportable)\s+(?:document|report|pdf|docx|word\s+doc|text\s+file)\b",
+]
+DOC_GEN_REGEX = re.compile("|".join(DOC_GEN_PATTERNS), re.IGNORECASE)
+
+
+def is_document_generation_request(question: str) -> bool:
+    """
+    Identifies requests to generate, write, create, or export downloadable documents
+    (reports, resumes, proposals, technical docs, meeting minutes, DOCX, PDF, TXT, MD).
+    Distinguishes document generation from Excel generation, document QA, and formula explanations.
+    """
+    if not question:
+        return False
+    q = question.strip()
+    if is_weather_request(q) or is_standalone_math_request(q):
+        return False
+    if is_verbatim_extraction_request(q):
+        return False
+    if is_excel_generation_request(q):
+        return False
+    if re.search(r"\b(?:convert|turn|export)\b.*\bpdf\b.*\b(?:into|to)\b.*\b(?:text|txt|markdown|\.?md)\b", q, re.I):
+        return False
+    return bool(DOC_GEN_REGEX.search(q))
+
+
+PDF_TOOL_PATTERNS = [
+    # 1. Merge
+    r"\b(?:merge|combine|join|concatenate)\b.*\b(?:pdfs?|documents?|files?)\b",
+    # 2. Extract pages / split
+    r"\b(?:extract|pull\s+out|isolate)\s+(?:pages?|page\s+numbers?)\b",
+    r"\b(?:extract|pull\s+out|isolate)\b.*\bpages?\s+\d+",
+    r"\bsplit\b.*\b(?:pdf|document|file|by\s+pages?|ranges?)\b",
+    # 3. Rotate
+    r"\b(?:rotate|turn|orient)\b.*\b(?:pages?|pdf|document)\b",
+    r"\b(?:rotate|turn)\b.*\b(?:90|180|270)\s*(?:deg|degrees)?\b",
+    # 4. Compress
+    r"\b(?:compress|shrink|reduce|optimize|minimize)\b.*\b(?:pdf|file\s+size|pdf\s+size)\b",
+    # 5. Convert PDF to text / markdown
+    r"\b(?:convert|turn|export)\b.*\b(?:this\s+|the\s+)?pdf\b.*\b(?:into|to)\b.*\b(?:text|txt|markdown|\.?md)\b",
+    r"\bextract\s+(?:all\s+)?text\s+from\s+(?:the\s+|this\s+)?pdf\b",
+    # 6. Extract tables from PDF to Excel / CSV
+    r"\b(?:extract|export)\b.*\b(?:tables?|tabular\s+data)\b.*\b(?:from\s+(?:the\s+|this\s+)?pdf|to\s+(?:excel|spreadsheet|\.?xlsx?|\.?csv))\b",
+    r"\bconvert\s+(?:this\s+|the\s+)?pdf\s+(?:into|to)\s+(?:an?\s+)?(?:excel|spreadsheet|\.?xlsx?|\.?csv)\b",
+    # 7. Watermark
+    r"\b(?:add|insert|apply|put)?\s*.*\bwatermark\b",
+    r"\bwatermark\b",
+    # 8. Page numbers
+    r"\b(?:add|insert|include)\s+(?:page\s+numbers?|pagination)\b.*\b(?:pdf|document)\b",
+    # 9. PDF info / metadata
+    r"\b(?:show|get|display|view|check|inspect)?\s*.*(?:\b(?:pdf\s+)?(?:info|information|metadata|properties|page\s+count|dimensions)\b.*\bpdf\b|\bpdf\b.*\b(?:info|information|metadata|properties|page\s+count|dimensions)\b)",
+    r"\bpdf\s+(?:info|metadata|properties|information)\b",
+    # 10. Images to PDF
+    r"\b(?:convert|turn|compile)\b.*\b(?:images?|photos?|pictures?)\b.*\b(?:into|to)\b.*\bpdf\b",
+]
+PDF_TOOL_REGEX = re.compile("|".join(PDF_TOOL_PATTERNS), re.IGNORECASE)
+
+PDF_EXCLUDE_REGEX = re.compile(
+    r"\b(summariz|summary|what\s+does|what\s+is|explain|find\s+the\s+section|who\s+is|tell\s+me\s+about|"
+    r"how\s+does|search\s+for|according\s+to|state\s+the|answer\s+from)\b|"
+    r"\b(create|generate|write|draft|build|produce)\s+(?:a|an)?\s*(?:new\s+)?(?:project\s+report|technical\s+report|business\s+report|report|resume|proposal|cover\s+letter|srs|test\s+plan)\b",
+    re.IGNORECASE
+)
+
+
+def is_pdf_tool_request(question: str) -> bool:
+    """
+    Identifies requests for PDF manipulation tools:
+    merge, split, extract pages, rotate, compress, convert to text/markdown, extract tables, watermark, page numbers, info.
+    Distinguishes PDF tools from:
+    - Document Q&A / Summarization -> RAG ('From document')
+    - Report/Resume/Proposal generation -> Document Generator
+    - Excel workbook creation -> Excel Generator
+    """
+    if not question:
+        return False
+    q = question.strip()
+    if is_weather_request(q) or is_standalone_math_request(q) or is_excel_formula_explanation(q):
+        return False
+    if is_verbatim_extraction_request(q):
+        return False
+    if is_document_generation_request(q) and not re.search(r"\b(?:images?|photos?|pictures?)\b", q, re.I):
+        return False
+    if PDF_EXCLUDE_REGEX.search(q):
+        return False
+    return bool(PDF_TOOL_REGEX.search(q))
+
+
+is_pdf_tools = is_pdf_tool_request
+
 
 
 class QueryRouter:
@@ -189,6 +316,12 @@ class QueryRouter:
     def is_excel_generation(self, question: str) -> bool:
         return is_excel_generation_request(question)
 
+    def is_document_generation(self, question: str) -> bool:
+        return is_document_generation_request(question)
+
+    def is_pdf_tools(self, question: str) -> bool:
+        return is_pdf_tool_request(question)
+
     async def detect_intent(
         self,
         question: str,
@@ -199,10 +332,19 @@ class QueryRouter:
     ) -> Tuple[str, str, str]:
         """
         Determines (route, badge, prompt_type) for the request:
-        - prompt_type in {"grounded_qa", "verbatim_extraction", "general_chat", "general_chat_with_context", "excel_generation"}
+        - prompt_type in {"grounded_qa", "verbatim_extraction", "general_chat", "general_chat_with_context", "excel_generation", "document_generation", "pdf_tools"}
         """
+        if is_excel_formula_explanation(question):
+            return "general", "📊 Formula Explainer", "general_chat"
+
         if is_excel_generation_request(question):
             return "excel_generation", "📊 Excel Generator", "excel_generation"
+
+        if is_document_generation_request(question):
+            return "document_generation", "📝 Document Generator", "document_generation"
+
+        if is_pdf_tool_request(question):
+            return "pdf_tools", "🛠️ PDF Tools", "pdf_tools"
 
         route, badge = await self.route_query(
             question=question,
@@ -214,10 +356,19 @@ class QueryRouter:
         if route == "excel_generation":
             return "excel_generation", "📊 Excel Generator", "excel_generation"
 
+        if route == "document_generation":
+            return "document_generation", "📝 Document Generator", "document_generation"
+
+        if route == "pdf_tools":
+            return "pdf_tools", "🛠️ PDF Tools", "pdf_tools"
+
         if route == "document":
             if is_verbatim_extraction_request(question):
                 return "document", "Exact Extraction", "verbatim_extraction"
             return "document", badge, "grounded_qa"
+
+        if is_excel_formula_explanation(question):
+            return "general", "📊 Formula Explainer", "general_chat"
 
         if is_weather_request(question):
             return "general", "⛅ Live Weather", "general_chat"
@@ -240,6 +391,10 @@ class QueryRouter:
         Decides between 'document' question vs 'general' question vs 'web' research:
         - When weather is detected -> 'general' (answered via live weather tool)
         - When standalone math is detected -> 'general' (answered via calculator tool)
+        - When formula explanation -> 'general' (📊 Formula Explainer)
+        - When Excel workbook generation -> 'excel_generation' (📊 Excel Generator)
+        - When Document generation (report, resume, proposal, docx, pdf) -> 'document_generation' (📝 Document Generator)
+        - When PDF Tools manipulation (merge, split, rotate, compress, tables, text) -> 'pdf_tools' (🛠️ PDF Tools)
         - When Web Mode is ON (toggle active in UI):
             - If user explicitly refers to document context -> 'document'
             - Otherwise -> 'web' (grounded in live web research)
@@ -260,17 +415,37 @@ class QueryRouter:
         if is_standalone_math_request(clean_q):
             return "general", "🧮 Calculator"
 
+        # 2.5. Excel formula explanation queries
+        if is_excel_formula_explanation(clean_q):
+            return "general", "📊 Formula Explainer"
+
         # 3. Excel Workbook Generation queries
         if is_excel_generation_request(clean_q):
             return "excel_generation", "📊 Excel Generator"
 
-        # 4. Web Mode Active toggle from UI
+        # 3.5. Document Generation queries (DOCX, PDF, TXT, MD, reports, resumes, proposals)
+        if is_document_generation_request(clean_q):
+            return "document_generation", "📝 Document Generator"
+
+        # 3.6. PDF Tools queries (merge, split, extract pages, rotate, compress, tables, watermark, etc.)
+        if is_pdf_tool_request(clean_q):
+            return "pdf_tools", "🛠️ PDF Tools"
+
+        # 4. Common conversational pleasantries/greetings (never trigger web search)
+        if GREETINGS_PATTERN.match(clean_q):
+            return "general", "General answer"
+
+        # 5. Web Mode Active toggle from UI
         if web_mode:
             # If the user explicitly asks about the uploaded document, prioritize document QA
             if DOC_EXPLICIT_REGEX.search(clean_q):
                 pass
             else:
                 return "web", "🌐 Live Web Search"
+
+        # Explicit web search requests ALWAYS route to web (even if documents are loaded)
+        if is_explicit_web_search_request(clean_q):
+            return "web", "🌐 Live Web Search"
 
         # 4. Case: No documents uploaded or active -> pure ChatGPT mode / web search
         if not has_documents or (active_doc_ids is not None and len(active_doc_ids) == 0):
@@ -291,9 +466,12 @@ class QueryRouter:
         has_excel_terms = any(
             k in clean_q.lower()
             for k in (
-                "excel", "sheet", "row", "column", "table", "sales", "target",
-                "department", "highest", "lowest", "total", "average", "mean",
-                "sum", "max", "min", "count", "group", "filter", "spreadsheet", "workbook"
+                "excel", "sheet", "row", "column", "table", "sales", "target", "profit",
+                "revenue", "margin", "quantity", "cost", "unit", "transaction",
+                "department", "region", "salesperson", "product", "highest", "lowest",
+                "total", "average", "mean", "sum", "max", "min", "count", "group",
+                "filter", "spreadsheet", "workbook", "top", "rank", "ranking", "month",
+                "monthly", "duplicate", "missing", "chart", "trend", "compare"
             )
         )
         if has_spreadsheet:

@@ -39,36 +39,35 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        if is_sqlite:
-            def _migrate_sqlite_columns(sync_conn):
-                from sqlalchemy import inspect
-                inspector = inspect(sync_conn)
-                tables = inspector.get_table_names()
+        def _migrate_columns(sync_conn):
+            from sqlalchemy import inspect
+            inspector = inspect(sync_conn)
+            tables = inspector.get_table_names()
 
-                if "documents" in tables:
-                    columns = [c["name"] for c in inspector.get_columns("documents")]
-                    if "user_id" not in columns:
-                        logger.info("Auto-migrating SQLite: adding user_id to documents")
-                        sync_conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN user_id VARCHAR(64)")
-                        sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_documents_user_id ON documents (user_id)")
+            if "documents" in tables:
+                columns = [c["name"] for c in inspector.get_columns("documents")]
+                if "user_id" not in columns:
+                    logger.info("Auto-migrating: adding user_id to documents")
+                    sync_conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN user_id VARCHAR(64)")
+                    sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_documents_user_id ON documents (user_id)")
 
-                if "conversations" in tables:
-                    columns = [c["name"] for c in inspector.get_columns("conversations")]
-                    if "user_id" not in columns:
-                        logger.info("Auto-migrating SQLite: adding user_id to conversations")
-                        sync_conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN user_id VARCHAR(64)")
-                        sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_conversations_user_id ON conversations (user_id)")
+            if "conversations" in tables:
+                columns = [c["name"] for c in inspector.get_columns("conversations")]
+                if "user_id" not in columns:
+                    logger.info("Auto-migrating: adding user_id to conversations")
+                    sync_conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN user_id VARCHAR(64)")
+                    sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_conversations_user_id ON conversations (user_id)")
 
-                if "messages" in tables:
-                    columns = [c["name"] for c in inspector.get_columns("messages")]
-                    if "weather" not in columns:
-                        logger.info("Auto-migrating SQLite: adding weather to messages")
-                        sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN weather JSON")
-                    if "excel_artifact" not in columns:
-                        logger.info("Auto-migrating SQLite: adding excel_artifact to messages")
-                        sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN excel_artifact JSON")
+            if "messages" in tables:
+                columns = [c["name"] for c in inspector.get_columns("messages")]
+                if "weather" not in columns:
+                    logger.info("Auto-migrating: adding weather to messages")
+                    sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN weather JSON")
+                if "excel_artifact" not in columns:
+                    logger.info("Auto-migrating: adding excel_artifact to messages")
+                    sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN excel_artifact JSON")
 
-            await conn.run_sync(_migrate_sqlite_columns)
+        await conn.run_sync(_migrate_columns)
 
 async def check_db_health() -> bool:
     """Verifies that the database pool and connection are responsive."""

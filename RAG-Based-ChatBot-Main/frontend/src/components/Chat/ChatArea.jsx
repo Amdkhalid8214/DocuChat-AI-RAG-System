@@ -2,6 +2,8 @@ import React, { useRef, useEffect } from "react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import WeatherCard from "./WeatherCard";
 import ExcelArtifactCard from "./ExcelArtifactCard";
+import DocumentArtifactCard from "./DocumentArtifactCard";
+import PdfArtifactCard from "./PdfArtifactCard";
 import TestCoverageDashboard from "./TestCoverageDashboard";
 
 function getResolvedExcelArtifact(msg) {
@@ -37,11 +39,57 @@ function getResolvedExcelArtifact(msg) {
   return null;
 }
 
+function getResolvedDocumentArtifact(msg) {
+  if (msg.document_artifact) {
+    if (typeof msg.document_artifact === "string") {
+      try {
+        return JSON.parse(msg.document_artifact);
+      } catch {
+        // ignore
+      }
+    } else if (typeof msg.document_artifact === "object") {
+      return msg.document_artifact;
+    }
+  }
+
+  // Fallback if document_artifact not explicitly populated in older record
+  const content = msg.content || "";
+  const fnMatch = content.match(/\*\*([a-zA-Z0-9_\-]+\.(docx|pdf|txt|md))\*\*/i);
+  if (fnMatch) {
+    const fn = fnMatch[1];
+    const ext = fn.split(".").pop().toUpperCase();
+    return {
+      filename: fn,
+      file_type: `${ext} Document`,
+      format: ext.toLowerCase(),
+      validation_status: "Created and validated",
+      download_url: `/api/tools/download/${encodeURIComponent(fn)}`
+    };
+  }
+  return null;
+}
+
+function getResolvedPdfArtifact(msg) {
+  if (msg.pdf_artifact) {
+    if (typeof msg.pdf_artifact === "string") {
+      try {
+        return JSON.parse(msg.pdf_artifact);
+      } catch {
+        // ignore
+      }
+    } else if (typeof msg.pdf_artifact === "object") {
+      return msg.pdf_artifact;
+    }
+  }
+  return null;
+}
+
 export default function ChatArea({
   messages = [],
   isGenerating,
   onCitationClick,
   onQuickPromptClick,
+  onPreviewInViewer,
   activeDoc
 }) {
   const bottomRef = useRef(null);
@@ -65,6 +113,8 @@ export default function ChatArea({
               const isUser = msg.role === "user";
               const msgId = msg.id || idx;
               const excelArtifact = !isUser ? getResolvedExcelArtifact(msg) : null;
+              const docArtifact = !isUser ? getResolvedDocumentArtifact(msg) : null;
+              const pdfArtifact = !isUser ? getResolvedPdfArtifact(msg) : null;
 
               if (isUser) {
                 return (
@@ -91,7 +141,7 @@ export default function ChatArea({
               }
 
               // Filter out completely empty assistant messages if generation ended
-              if (!msg.content && !isGenerating && (!msg.citations || msg.citations.length === 0) && !msg.weather && !excelArtifact) {
+              if (!msg.content && !isGenerating && (!msg.citations || msg.citations.length === 0) && !msg.weather && !excelArtifact && !docArtifact && !pdfArtifact) {
                 return null;
               }
 
@@ -138,6 +188,16 @@ export default function ChatArea({
                     {/* Dedicated Downloadable Excel Workbook Card matching Reference Screenshot 2 */}
                     {excelArtifact && (
                       <ExcelArtifactCard artifact={excelArtifact} />
+                    )}
+
+                    {/* Dedicated Downloadable Document Card (DOCX, PDF, TXT, MD) */}
+                    {docArtifact && (
+                      <DocumentArtifactCard artifact={docArtifact} />
+                    )}
+
+                    {/* Dedicated Downloadable PDF Tools Card */}
+                    {pdfArtifact && (
+                      <PdfArtifactCard artifact={pdfArtifact} onPreviewInViewer={onPreviewInViewer} />
                     )}
 
                     {/* Dedicated QA Test Coverage Dashboard matching Reference Screenshot 1 */}

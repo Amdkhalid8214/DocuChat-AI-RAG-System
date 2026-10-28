@@ -103,7 +103,7 @@ def test_grounded_prompt_template_and_messages():
     sys_text = system_msg.content
     assert "DocuChat AI" in sys_text
     assert "document-grounded" in sys_text
-    assert "PRIMARY RULE:" in sys_text
+    assert "PRIMARY RULE" in sys_text
     assert "This is not mentioned in the provided document context." in sys_text
 
     # Verify human message structure

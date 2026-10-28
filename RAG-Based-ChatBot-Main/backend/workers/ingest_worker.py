@@ -96,6 +96,14 @@ async def process_document_job(job_id: str, doc_id: str, file_path: str, ext: st
             logger.error(f"Document {doc_id} not found for job {job_id}")
             return
 
+        # Resolve file_path across OS boundaries (e.g. host Windows paths vs container Linux paths)
+        if not os.path.exists(file_path):
+            filename = Path(file_path).name
+            candidate = os.path.join(settings.UPLOAD_DIR, filename)
+            if os.path.exists(candidate):
+                file_path = candidate
+                logger.info(f"Resolved file_path to container location: {file_path}")
+
         try:
             # 1. Queued
             logger.info(f"[Job {job_id}] Processing started for '{doc.filename}' (ID: {doc_id})")
@@ -251,7 +259,7 @@ async def recover_zombie_jobs() -> Dict[str, int]:
             logger.warning(f"Recovered orphaned job {job.id} for document {job.document_id}.")
 
         # 2. Recover DocumentModel
-        doc_stmt = select(DocumentModel).where(DocumentModel.status == "processing")
+        doc_stmt = select(DocumentModel).where(DocumentModel.status.in_(active_statuses))
         doc_res = await session.execute(doc_stmt)
         zombie_docs = doc_res.scalars().all()
         for doc in zombie_docs:
@@ -264,4 +272,42 @@ async def recover_zombie_jobs() -> Dict[str, int]:
             logger.info(f"Zombie job recovery complete: {len(zombie_jobs)} jobs, {len(zombie_docs)} documents updated.")
 
         return {"recovered_jobs": len(zombie_jobs), "recovered_docs": len(zombie_docs)}
+
+async def run_worker():
+    """
+    Continuous background loop for dedicated worker container.
+    Consumes document ingestion tasks from Redis queue 'docuchat_ingest_queue'.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logger.info("DocuChat Ingest Worker initialized.")
+    try:
+        await recover_zombie_jobs()
+    except Exception as e:
+        logger.warning(f"Initial zombie job recovery warning: {e}")
+
+    import redis.asyncio as aioredis
+    while True:
+        try:
+            r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+            logger.info(f"Worker connected to Redis at {settings.REDIS_URL}. Waiting for ingestion jobs...")
+            while True:
+                item = await r.blpop("docuchat_ingest_queue", timeout=5)
+                if item:
+                    _, payload = item
+                    parts = payload.split(":", 3)
+                    if len(parts) == 4:
+                        job_id, doc_id, f_path, ext = parts
+                        logger.info(f"Worker picked up job {job_id} for doc {doc_id}")
+                        await process_document_job(job_id, doc_id, f_path, ext)
+                    else:
+                        logger.warning(f"Malformed queue payload: {payload}")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Redis worker connection error: {e}. Retrying in 3 seconds...")
+            await asyncio.sleep(3)
+
+if __name__ == "__main__":
+    asyncio.run(run_worker())
+
 

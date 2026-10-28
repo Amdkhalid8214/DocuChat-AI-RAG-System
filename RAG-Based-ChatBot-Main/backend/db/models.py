@@ -5,7 +5,7 @@ from sqlalchemy import String, Integer, DateTime, Text, ForeignKey, JSON, Index,
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 def utc_now():
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class Base(DeclarativeBase):
     pass
@@ -74,6 +74,8 @@ class MessageModel(Base):
     citations: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     weather: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     excel_artifact: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    document_artifact: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    pdf_artifact: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
 
     conversation: Mapped["ConversationModel"] = relationship("ConversationModel", back_populates="messages")
@@ -88,6 +90,8 @@ class MessageModel(Base):
             "citations": self.citations or [],
             "weather": self.weather,
             "excel_artifact": self.excel_artifact,
+            "document_artifact": self.document_artifact,
+            "pdf_artifact": self.pdf_artifact,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

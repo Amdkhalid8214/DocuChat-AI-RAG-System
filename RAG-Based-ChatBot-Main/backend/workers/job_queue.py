@@ -64,6 +64,7 @@ async def enqueue_document_ingestion(
         logger.debug(f"Redis queue dispatch not active, running async background worker ({e})")
 
     # In standalone / dev mode or as fallback, run in non-blocking async task
-    asyncio.create_task(process_document_job(job_id, doc_id, file_path, ext))
+    if not dispatched_via_redis:
+        asyncio.create_task(process_document_job(job_id, doc_id, file_path, ext))
 
     return job_id

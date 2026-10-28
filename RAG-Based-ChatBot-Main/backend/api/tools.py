@@ -33,6 +33,8 @@ async def execute_tool_endpoint(req: ToolExecuteRequest):
     return result
 
 @router.get("/download/{filename}")
+@router.get("/artifacts/{filename}/download")
+@router.get("/artifacts/{filename}")
 async def download_output_file(
     filename: str,
     current_user: Optional[UserModel] = Depends(get_current_user_optional)
@@ -70,7 +72,16 @@ async def download_output_file(
     if not resolved_target.exists():
         raise HTTPException(status_code=404, detail="Requested generated file not found.")
 
-    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if safe_filename.endswith(".xlsx") else "application/octet-stream"
+    ext = safe_filename.lower().rsplit(".", 1)[-1] if "." in safe_filename else ""
+    mime_map = {
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pdf": "application/pdf",
+        "txt": "text/plain; charset=utf-8",
+        "md": "text/markdown; charset=utf-8",
+        "csv": "text/csv; charset=utf-8",
+    }
+    media_type = mime_map.get(ext, "application/octet-stream")
 
     return FileResponse(
         path=str(resolved_target),

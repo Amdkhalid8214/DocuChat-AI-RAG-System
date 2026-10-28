@@ -1,0 +1,418 @@
+/* DocuChat AI - PDF Tools Workstation / Modal Styles */
+
+.pdf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: pdfFadeIn 0.2s ease-out;
+}
+
+@keyframes pdfFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pdf-modal-container {
+  background: #ffffff;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  animation: pdfSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pdfSlideUp {
+  from {
+    transform: translateY(16px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Modal Header */
+.pdf-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
+}
+
+.pdf-header-title-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pdf-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pdf-header-title-box h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pdf-header-title-box p {
+  margin: 2px 0 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.pdf-btn-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: #64748b;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.pdf-btn-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Operations Nav Bar / Tabs */
+.pdf-modal-tabs {
+  display: flex;
+  overflow-x: auto;
+  padding: 8px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 4px;
+  scrollbar-width: thin;
+}
+
+.pdf-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pdf-tab-btn:hover {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.pdf-tab-btn.active {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+/* Modal Body */
+.pdf-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Source Selector (Uploaded file vs Existing workspace document) */
+.pdf-source-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.pdf-source-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.pdf-source-radios {
+  display: flex;
+  gap: 16px;
+}
+
+.pdf-source-radios label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+/* Dropzone & Upload */
+.pdf-dropzone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fdfdfd;
+}
+
+.pdf-dropzone:hover {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.pdf-dropzone-icon {
+  color: #dc2626;
+  margin-bottom: 8px;
+}
+
+.pdf-dropzone p {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pdf-dropzone span {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* Form Fields */
+.pdf-form-group {
+  margin-bottom: 16px;
+}
+
+.pdf-form-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.pdf-form-input,
+.pdf-form-select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  background: #ffffff;
+  transition: border-color 0.15s ease;
+}
+
+.pdf-form-input:focus,
+.pdf-form-select:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.pdf-form-hint {
+  display: block;
+  font-size: 11.5px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* Multi-file List for Merge */
+.pdf-files-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pdf-file-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.pdf-file-order-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.pdf-file-order-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pdf-file-order-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdf-btn-icon-sm {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.pdf-btn-icon-sm:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.pdf-btn-icon-sm:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Results / Artifact Display */
+.pdf-result-card {
+  margin-top: 20px;
+  padding: 16px 20px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pdf-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #166534;
+}
+
+.pdf-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-error-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Modal Footer */
+.pdf-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #fafafa;
+}
+
+.pdf-btn-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+.pdf-btn-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  transform: translateY(-1px);
+}
+
+.pdf-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pdf-btn-cancel {
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdf-btn-cancel:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}

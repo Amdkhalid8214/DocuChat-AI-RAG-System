@@ -1,0 +1,216 @@
+/* DocuChat AI - PDF Tools Artifact Card Styles */
+
+.pdf-artifact-card-container {
+  margin-top: 14px;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, rgba(254, 242, 242, 0.95) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  max-width: 580px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.pdf-artifact-card-container:hover {
+  border-color: rgba(220, 38, 38, 0.35);
+  box-shadow: 0 6px 24px rgba(220, 38, 38, 0.1), 0 2px 6px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.pdf-artifact-card-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #dc2626 0%, #ef4444 50%, #f87171 100%);
+}
+
+.pdf-card-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.pdf-card-icon-box {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1.5px solid;
+  transition: transform 0.2s ease;
+}
+
+.pdf-artifact-card-container:hover .pdf-card-icon-box {
+  transform: scale(1.05);
+}
+
+.pdf-card-title-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.pdf-card-top-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.pdf-operation-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.pdf-status-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdf-card-filename {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 6px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.2px;
+}
+
+.pdf-card-meta-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #475569;
+}
+
+.pdf-meta-chip {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(203, 213, 225, 0.7);
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.pdf-meta-chip.highlight {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+  font-weight: 600;
+}
+
+.pdf-meta-chip.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+/* Callout / Disclaimer */
+.pdf-card-callout {
+  margin-top: 10px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.pdf-card-callout.info {
+  background: rgba(239, 246, 255, 0.8);
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  color: #1e40af;
+}
+
+.pdf-card-callout.warn {
+  background: rgba(254, 243, 199, 0.8);
+  border: 1px solid rgba(253, 230, 138, 0.8);
+  color: #92400e;
+}
+
+/* Button Actions Row */
+.pdf-card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(226, 232, 240, 0.9);
+}
+
+.pdf-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+.pdf-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+}
+
+.pdf-btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.pdf-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdf-btn-secondary:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}

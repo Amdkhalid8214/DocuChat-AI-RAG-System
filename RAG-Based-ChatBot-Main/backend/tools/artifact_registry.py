@@ -67,11 +67,24 @@ class ArtifactRegistry:
         artifact_id: Optional[str] = None,
         generation_request_id: Optional[str] = None,
         extra_metadata: Optional[Dict[str, Any]] = None,
+        mime_type: Optional[str] = None,
     ) -> ArtifactRecord:
         with self._lock:
             art_id = artifact_id or str(uuid.uuid4())
             gen_id = generation_request_id or str(uuid.uuid4())
             safe_filename = Path(filename).name
+
+            if not mime_type:
+                ext = safe_filename.lower().rsplit(".", 1)[-1] if "." in safe_filename else ""
+                mime_map = {
+                    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "pdf": "application/pdf",
+                    "txt": "text/plain; charset=utf-8",
+                    "md": "text/markdown; charset=utf-8",
+                    "csv": "text/csv; charset=utf-8",
+                }
+                mime_type = mime_map.get(ext, "application/octet-stream")
 
             record = ArtifactRecord(
                 artifact_id=art_id,
@@ -86,6 +99,7 @@ class ArtifactRegistry:
                 worksheet_count=worksheet_count,
                 worksheet_names=worksheet_names or ["Sheet1"],
                 file_size=file_size,
+                mime_type=mime_type,
                 validation_status=validation_status,
                 is_qa_test_data=is_qa_test_data,
                 download_url=f"/api/tools/download/{art_id}",

@@ -1,7 +1,9 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import SpreadsheetViewer from "./SpreadsheetViewer";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
+const API_BASE = (typeof window !== "undefined" && window.location.hostname)
+  ? `${window.location.protocol}//${window.location.hostname}:5000/api`
+  : (process.env.REACT_APP_API_BASE || "http://localhost:5000/api");
 
 function PdfDocumentViewer({
   document: doc,
@@ -117,6 +119,18 @@ function PdfDocumentViewer({
       const ext = (doc.file_type || doc.filename?.split(".").pop() || "").toLowerCase();
       const isTextFile = ["txt", "md", "html", "htm", "json"].includes(ext);
 
+      // If document is currently in ingestion / conversion / parsing pipeline, display status without premature PDF parse errors
+      if (doc.status && doc.status !== "ready" && !isTextFile) {
+        if (doc.status === "failed") {
+          setIsLoading(false);
+          setErrorMsg(doc.status_message || "Document processing failed. Please retry ingestion.");
+          return;
+        }
+        setIsLoading(true);
+        setErrorMsg(null);
+        return;
+      }
+
       try {
         const token = localStorage.getItem("docuchat_token");
         const authHeaders = {};
@@ -200,7 +214,7 @@ function PdfDocumentViewer({
     return () => {
       isCancelled = true;
     };
-  }, [doc?.id, retryCount]);
+  }, [doc?.id, doc?.status, retryCount]);
 
   // Render Page on Canvas with High-DPI (Device Pixel Ratio)
   const renderPage = useCallback(
@@ -713,7 +727,18 @@ function PdfDocumentViewer({
               {isLoading ? (
                 <div className="doc-loading-block">
                   <div className="doc-spinner" />
-                  <p className="doc-loading-text">Loading document preview...</p>
+                  <p className="doc-loading-text">
+                    {doc?.status && doc.status !== "ready"
+                      ? `Processing document (${doc.status_message || doc.status})...`
+                      : "Loading document preview..."}
+                  </p>
+                  {doc?.status && doc.status !== "ready" && (
+                    <div style={{ marginTop: "8px" }}>
+                      <span className="doc-meta-val status-badge-inline" style={{ textTransform: "capitalize" }}>
+                        Status: {doc.status}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : errorMsg ? (
                 <div className="doc-error-block">

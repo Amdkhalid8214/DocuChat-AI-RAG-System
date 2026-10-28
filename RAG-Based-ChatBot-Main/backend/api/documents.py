@@ -526,3 +526,50 @@ async def delete_document(
 
     return {"message": "Document deleted successfully", "id": doc_id}
 
+
+@router.post("/{doc_id}/sync-vectors")
+async def sync_document_vectors(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[UserModel] = Depends(get_current_user_optional)
+):
+    """Re-indexes dense vectors into Qdrant for an existing ready document from its BM25 chunks."""
+    doc_res = await db.execute(select(DocumentModel).where(DocumentModel.id == doc_id))
+    doc = doc_res.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    chunks = bm25_index.get_document_chunks(doc_id)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No chunks found for document in BM25 index")
+
+    from backend.embeddings.embedder import embedder
+    from backend.chunking.structure_chunker import Chunk
+
+    chunk_objs = [
+        Chunk(
+            chunk_id=c["chunk_id"],
+            doc_id=c.get("doc_id", doc_id),
+            text=c["text"],
+            page=c.get("page", 1),
+            bboxes=c.get("bboxes", []),
+            heading_path=c.get("heading_path", []),
+            token_count=c.get("token_count", 0),
+            metadata=c.get("metadata", {})
+        )
+        for c in chunks
+    ]
+    texts = [c.text for c in chunk_objs]
+    vectors = embedder.embed_texts(texts)
+    vector_store.delete_by_doc_id(doc_id)
+    vector_store.upsert_chunks(chunk_objs, vectors)
+    logger.info(f"Manually synced {len(vectors)} vectors for document {doc_id} ({doc.filename}).")
+
+    return {
+        "status": "success",
+        "doc_id": doc_id,
+        "filename": doc.filename,
+        "synced_chunks": len(vectors)
+    }
+
+

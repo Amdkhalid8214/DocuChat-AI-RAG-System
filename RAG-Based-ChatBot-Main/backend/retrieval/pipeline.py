@@ -43,20 +43,29 @@ class RetrievalPipeline:
         # Step 7: Parallel retrieval for each generated query
         async def fetch_query_results(q: str):
             # Vector search
-            qvec = await asyncio.to_thread(embedder.embed_query, q)
-            v_hits = await asyncio.to_thread(
-                vector_store.search,
-                query_vector=qvec,
-                doc_ids=doc_ids,
-                limit=settings.RETRIEVAL_TOP_K
-            )
+            v_hits = []
+            try:
+                qvec = await asyncio.to_thread(embedder.embed_query, q)
+                v_hits = await asyncio.to_thread(
+                    vector_store.search,
+                    query_vector=qvec,
+                    doc_ids=doc_ids,
+                    limit=settings.RETRIEVAL_TOP_K
+                )
+            except Exception as v_err:
+                logger.warning(f"[RETRIEVAL] Vector search failed ({v_err}), falling back to lexical search")
+
             # BM25 search
-            b_hits = await asyncio.to_thread(
-                bm25_index.search,
-                query=q,
-                doc_ids=doc_ids,
-                limit=settings.RETRIEVAL_TOP_K
-            )
+            b_hits = []
+            try:
+                b_hits = await asyncio.to_thread(
+                    bm25_index.search,
+                    query=q,
+                    doc_ids=doc_ids,
+                    limit=settings.RETRIEVAL_TOP_K
+                )
+            except Exception as b_err:
+                logger.warning(f"[RETRIEVAL] BM25 search failed ({b_err})")
             return v_hits, b_hits
 
         tasks = [fetch_query_results(q) for q in queries]
@@ -88,14 +97,19 @@ class RetrievalPipeline:
         # Step 9: Deduplication
         deduped = deduplicate_chunks(fused, similarity_threshold=settings.DEDUP_SIMILARITY_THRESHOLD)
 
-        # Step 10: Cross-Encoder Reranker on top ~6 candidates for fast CPU inference
-        top_candidates = deduped[:6]
-        rescored = await asyncio.to_thread(reranker.rerank, primary_query, top_candidates, 6)
+        # Step 10: Cross-Encoder Reranker on top ~12 candidates
+        top_candidates = deduped[:12]
+        rescored = await asyncio.to_thread(reranker.rerank, primary_query, top_candidates, 12)
         logger.info(f"[RERANK] Candidates reranked: {len(top_candidates)}")
 
         # Step 11: Top-K Selection & Score Thresholding
         filtered = [c for c in rescored if c.get("score", 0.0) >= score_threshold]
-        if not filtered and rescored:
+        if filtered:
+            best_score = max(c.get("score", 0.0) for c in filtered)
+            if best_score >= 0.65:
+                # If a high-confidence match exists, filter out weak distractor passages
+                filtered = [c for c in filtered if c.get("score", 0.0) >= max(score_threshold, best_score * 0.75, 0.55)]
+        elif rescored:
             # Fallback: keep the highest-scoring candidate if candidates exist from target document
             filtered = rescored[:1]
         logger.info(f"[THRESHOLD] Accepted: {len(filtered)} (threshold={score_threshold})")
@@ -104,6 +118,7 @@ class RetrievalPipeline:
 
         # Step 12: Context Window & Section Continuation Expansion
         # Ensures cross-page sections, tables, numbered lists, and continuation paragraphs are never severed
+        # while PRESERVING primary relevance ranking (highest scoring section is always Source [1]).
         import re
         from collections import Counter
 
@@ -117,18 +132,25 @@ class RetrievalPipeline:
                     return counts.most_common(1)[0][0]
             return int(c.get("page") or 1)
 
-        expanded_chunks = list(final_top)
-        existing_ids = {c.get("chunk_id") for c in expanded_chunks}
+        expanded_chunks: List[Dict[str, Any]] = []
+        existing_ids = set()
 
         for top_c in list(final_top):
-            doc_id = top_c.get("doc_id")
-            if not doc_id:
-                continue
-            all_chunks = bm25_index.get_document_chunks(doc_id)
-            if not all_chunks:
+            top_id = top_c.get("chunk_id")
+            if not top_id or top_id in existing_ids:
                 continue
 
-            # Sort document chunks by true (page, vertical position) to preserve natural reading order
+            doc_id = top_c.get("doc_id")
+            all_chunks = bm25_index.get_document_chunks(doc_id) if doc_id else []
+
+            if not all_chunks:
+                top_c_copy = dict(top_c)
+                top_c_copy["page"] = resolve_chunk_page(top_c)
+                expanded_chunks.append(top_c_copy)
+                existing_ids.add(top_id)
+                continue
+
+            # Sort document chunks by true (page, vertical position) to find adjacent chunks
             sorted_chunks = sorted(
                 all_chunks,
                 key=lambda c: (
@@ -137,25 +159,47 @@ class RetrievalPipeline:
                 )
             )
 
-            s_idx = next((i for i, c in enumerate(sorted_chunks) if c.get("chunk_id") == top_c.get("chunk_id")), -1)
-            if s_idx != -1:
-                # 1. Forward multi-hop continuation: follow continuing tables, checklists, or clauses across pages
-                curr_hop_c = top_c
-                curr_hop_idx = s_idx
-                for hop in range(3):
-                    if curr_hop_idx + 1 >= len(sorted_chunks):
-                        break
-                    next_c = sorted_chunks[curr_hop_idx + 1]
-                    curr_hop_idx += 1
+            s_idx = next((i for i, c in enumerate(sorted_chunks) if c.get("chunk_id") == top_id), -1)
 
-                    next_id = next_c.get("chunk_id")
-                    if next_id in existing_ids:
-                        curr_hop_c = next_c
-                        continue
+            # 1. Backward continuation: check if top_c started midway through an item, sentence, or table
+            preceding_chunk = None
+            if s_idx - 1 >= 0:
+                prev_c = sorted_chunks[s_idx - 1]
+                prev_id = prev_c.get("chunk_id")
+                if prev_id not in existing_ids:
+                    top_txt = top_c.get("text", "").strip()
+                    prev_txt = prev_c.get("text", "").strip()
+                    prev_p = resolve_chunk_page(prev_c)
+                    curr_p = resolve_chunk_page(top_c)
+                    starts_lowercase = bool(top_txt and top_txt[0].islower()) or bool(re.match(r'^\s*\|\s*[\-a-z]', top_txt))
+                    is_table_pair = ("[TABLE]" in top_txt or "|" in top_txt) and ("[TABLE]" in prev_txt or "|" in prev_txt)
 
-                    curr_txt = curr_hop_c.get("text", "").strip()
+                    if (curr_p <= prev_p + 1) and (starts_lowercase or is_table_pair):
+                        prev_c_copy = dict(prev_c)
+                        prev_c_copy["score"] = float(top_c.get("score", 0.8)) * 0.95
+                        prev_c_copy["source"] = "preceding"
+                        prev_c_copy["page"] = prev_p
+                        preceding_chunk = prev_c_copy
+                        existing_ids.add(prev_id)
+                        logger.info(f"[EXPANSION] Appended preceding chunk (Page {prev_p}) to complete header context.")
+
+            if preceding_chunk:
+                expanded_chunks.append(preceding_chunk)
+
+            # 2. Primary candidate chunk
+            top_c_copy = dict(top_c)
+            top_c_copy["page"] = resolve_chunk_page(top_c)
+            expanded_chunks.append(top_c_copy)
+            existing_ids.add(top_id)
+
+            # 3. Forward multi-hop continuation: follow continuing tables, checklists, or clauses across pages
+            if s_idx != -1 and s_idx + 1 < len(sorted_chunks):
+                next_c = sorted_chunks[s_idx + 1]
+                next_id = next_c.get("chunk_id")
+                if next_id not in existing_ids:
+                    curr_txt = top_c.get("text", "").strip()
                     next_txt = next_c.get("text", "").strip()
-                    curr_p = resolve_chunk_page(curr_hop_c)
+                    curr_p = resolve_chunk_page(top_c)
                     next_p = resolve_chunk_page(next_c)
 
                     is_table_curr = "[TABLE]" in curr_txt or "|" in curr_txt
@@ -163,7 +207,6 @@ class RetrievalPipeline:
                     ends_unclosed = bool(re.search(r'[,:\-–—/]\s*$', curr_txt)) or not bool(re.search(r'[\.!?]\s*$', curr_txt))
                     has_numbered_list = bool(re.search(r'\n\d+\.\s', curr_txt)) or bool(re.search(r'\|\s*\d+\.\s', curr_txt))
 
-                    # Should continue if adjacent page or table/list spans across
                     should_continue = (
                         (next_p <= curr_p + 1) and (
                             (is_table_curr and is_table_next) or
@@ -172,50 +215,14 @@ class RetrievalPipeline:
                             ("ITEMS TO COVER" in curr_txt and next_p <= curr_p + 2)
                         )
                     )
-
                     if should_continue:
                         next_c_copy = dict(next_c)
-                        next_c_copy["score"] = float(top_c.get("score", 0.8)) * (0.95 ** (hop + 1))
-                        next_c_copy["source"] = f"continuation_hop_{hop+1}"
+                        next_c_copy["score"] = float(top_c.get("score", 0.8)) * 0.95
+                        next_c_copy["source"] = "continuation"
                         next_c_copy["page"] = next_p
                         expanded_chunks.append(next_c_copy)
                         existing_ids.add(next_id)
-                        curr_hop_c = next_c
-                        logger.info(f"[EXPANSION] Appended continuation chunk (Page {next_p}, hop {hop+1}) to complete section.")
-                    else:
-                        break
-
-                # 2. Backward continuation: check if top_c started midway through an item, sentence, or table
-                if s_idx - 1 >= 0:
-                    prev_c = sorted_chunks[s_idx - 1]
-                    prev_id = prev_c.get("chunk_id")
-                    if prev_id not in existing_ids:
-                        top_txt = top_c.get("text", "").strip()
-                        prev_txt = prev_c.get("text", "").strip()
-                        prev_p = resolve_chunk_page(prev_c)
-                        curr_p = resolve_chunk_page(top_c)
-                        starts_lowercase = bool(top_txt and top_txt[0].islower()) or bool(re.match(r'^\s*\|\s*[\-a-z]', top_txt))
-                        is_table_pair = ("[TABLE]" in top_txt or "|" in top_txt) and ("[TABLE]" in prev_txt or "|" in prev_txt)
-
-                        if (curr_p <= prev_p + 1) and (starts_lowercase or is_table_pair):
-                            prev_c_copy = dict(prev_c)
-                            prev_c_copy["score"] = float(top_c.get("score", 0.8)) * 0.95
-                            prev_c_copy["source"] = "preceding"
-                            prev_c_copy["page"] = prev_p
-                            expanded_chunks.append(prev_c_copy)
-                            existing_ids.add(prev_id)
-                            logger.info(f"[EXPANSION] Appended preceding chunk (Page {prev_p}) to complete header context.")
-
-        # Update true page and sort all chunks in document reading order
-        for c in expanded_chunks:
-            c["page"] = resolve_chunk_page(c)
-
-        expanded_chunks.sort(
-            key=lambda c: (
-                int(c.get("page") or 1),
-                c.get("bboxes", [{}])[0].get("y0", 0.0) if c.get("bboxes") else 0.0
-            )
-        )
+                        logger.info(f"[EXPANSION] Appended continuation chunk (Page {next_p}) to complete section.")
 
         logger.info(f"[CONTEXT] Context chunks after window expansion: {len(expanded_chunks)}")
         return expanded_chunks

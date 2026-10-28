@@ -145,6 +145,11 @@ def parse_excel_generation_request(prompt: str, context: Optional[str] = None) -
         domain = "customer_data"
         app_name = "Customer Relationship System" if is_qa else "Customer Directory"
         prefix = "customer_test_data" if is_qa else "customer_data"
+    elif re.search(r"\b(sales\s+performance\s+analysis\s+dashboard|sales\s+dashboard|sales.*2026|dashboard.*sales|sales.*dashboard|benchmark\s+excel)\b", clean_p, re.I):
+        domain = "sales_dashboard_2026"
+        app_name = "Sales Performance Analysis Dashboard — 2026"
+        prefix = "sales_performance_dashboard_2026"
+        is_qa = False
     elif re.search(r"\b(sales|orders?|products?|checkout|e-?commerce|inventory)\b", clean_p, re.I):
         domain = "sales_data"
         app_name = "E-Commerce System" if is_qa else "Product Sales"
@@ -199,9 +204,16 @@ def parse_excel_generation_request(prompt: str, context: Optional[str] = None) -
         worksheet_count = 4
         include_summary = True
     else:
-        if domain in ("cricket", "politicians", "football", "movies", "companies", "countries", "cars"):
+        if domain == "sales_dashboard_2026":
+            data_rows = extracted_rows or 30
+            data_columns = extracted_cols or 11
+            worksheet_count = 4
+            include_summary = True
+        elif domain in ("cricket", "politicians", "football", "movies", "companies", "countries", "cars"):
             data_rows = extracted_rows or 10
             data_columns = extracted_cols or 4
+            worksheet_count = 1
+            include_summary = False
         else:
             data_rows = extracted_rows or 20
             if extracted_cols is not None:
@@ -213,8 +225,8 @@ def parse_excel_generation_request(prompt: str, context: Optional[str] = None) -
                     data_columns = 10
                 else:
                     data_columns = 7
-        worksheet_count = 1
-        include_summary = False
+            worksheet_count = 1
+            include_summary = False
 
     # Multi-sheet check: "multiple worksheets", "3 sheets", "separate sheets"
     sheet_m = re.search(r"(\d+)\s*(?:work)?sheets?\b", clean_p, re.I)

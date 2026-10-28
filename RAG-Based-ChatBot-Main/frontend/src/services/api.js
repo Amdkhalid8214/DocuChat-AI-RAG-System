@@ -4,7 +4,19 @@
  * documents, conversations, and safe tool invocations.
  */
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000/api";
+export function getBackendRoot() {
+  if (process.env.REACT_APP_BACKEND_URL) return process.env.REACT_APP_BACKEND_URL.replace(/\/api\/?$/, "");
+  const host = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
+  const protocol = typeof window !== "undefined" && window.location.protocol ? window.location.protocol : "http:";
+  return `${protocol}//${host}:5000`;
+}
+
+export function getApiBase() {
+  if (process.env.REACT_APP_API_BASE) return process.env.REACT_APP_API_BASE;
+  return `${getBackendRoot()}/api`;
+}
+
+export const API_BASE = getApiBase();
 
 function getAuthHeaders() {
   const token = localStorage.getItem("docuchat_token");
@@ -172,12 +184,12 @@ export const api = {
 
   // Health
   async getHealth() {
-    const res = await fetch(`http://localhost:5000/health`);
+    const res = await fetch(`${getBackendRoot()}/health`);
     return res.json();
   },
 
   async getReadiness() {
-    const res = await fetch(`http://localhost:5000/ready`);
+    const res = await fetch(`${getBackendRoot()}/ready`);
     return res.json();
   },
 
@@ -208,6 +220,52 @@ export const api = {
     a.click();
     window.URL.revokeObjectURL(blobUrl);
     document.body.removeChild(a);
+  },
+
+  async downloadDocumentFile(identifier, downloadFilename) {
+    const safeId = encodeURIComponent(identifier);
+    const url = `${API_BASE}/tools/download/${safeId}`;
+    const token = localStorage.getItem("docuchat_token");
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      throw new Error(`Failed to download document: HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = downloadFilename || identifier;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(blobUrl);
+    document.body.removeChild(a);
+  },
+
+  // PDF Tools Module
+  async pdfToolsPost(endpoint, formData) {
+    const token = localStorage.getItem("docuchat_token");
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${API_BASE}/pdf-tools/${endpoint}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.message || `PDF operation failed (${res.status})`);
+    }
+    return res.json();
+  },
+
+  async downloadPdfArtifact(identifier, downloadFilename) {
+    return this.downloadDocumentFile(identifier, downloadFilename);
   }
 };
 

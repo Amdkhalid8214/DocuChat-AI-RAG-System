@@ -1,12 +1,16 @@
+name: gitrag
+
 services:
   # ==========================================
   # 1. FastAPI Backend Service
   # ==========================================
   backend:
+    image: gitrag-backend
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: docuchat_backend
+    command: ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "5000"]
     ports:
       - "5000:5000"
     extra_hosts:
@@ -15,11 +19,19 @@ services:
       - HOST=0.0.0.0
       - PORT=5000
       - QDRANT_URL=http://qdrant:6333
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - LLM_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_URL=http://ollama:11434
+      - LLM_BASE_URL=http://ollama:11434
+      - LLM_MODEL=qwen2.5:1.5b
+      - LLM_TEMPERATURE=0.0
+      - LLM_MAX_TOKENS=512
+      - LLM_NUM_THREADS=2
+      - LLM_NUM_CTX=2048
       - DOCLING_URL=http://docling:5001
       - DATABASE_URL=postgresql+asyncpg://raguser:ragpassword@postgres:5432/ragdb
+      - REDIS_URL=redis://redis:6379/0
+      - SEARXNG_URL=http://host.docker.internal:8080
     volumes:
+      - ./backend:/app/backend
       - backend_uploads:/app/backend/data/uploads
       - backend_converted:/app/backend/data/converted
       - backend_bm25:/app/backend/data/bm25
@@ -33,16 +45,21 @@ services:
         condition: service_started
       docling:
         condition: service_started
+      ollama:
+        condition: service_started
     restart: unless-stopped
 
   # ==========================================
   # 2. Ingestion Worker Service (Background Jobs)
   # ==========================================
   worker:
+    image: gitrag-backend
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: docuchat_worker
+    healthcheck:
+      disable: true
     command: ["python", "-m", "backend.workers.ingest_worker"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -51,9 +68,14 @@ services:
       - DATABASE_URL=postgresql+asyncpg://raguser:ragpassword@postgres:5432/ragdb
       - QDRANT_URL=http://qdrant:6333
       - DOCLING_URL=http://docling:5001
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - LLM_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_URL=http://ollama:11434
+      - LLM_BASE_URL=http://ollama:11434
+      - LLM_MODEL=qwen2.5:1.5b
+      - LLM_MAX_TOKENS=512
+      - LLM_NUM_THREADS=2
+      - LLM_NUM_CTX=2048
     volumes:
+      - ./backend:/app/backend
       - backend_uploads:/app/backend/data/uploads
       - backend_converted:/app/backend/data/converted
       - backend_bm25:/app/backend/data/bm25
@@ -63,6 +85,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_started
     restart: unless-stopped
 
   # ==========================================
@@ -110,9 +134,13 @@ services:
     container_name: docuchat_ollama
     ports:
       - "11434:11434"
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=2
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+
 
   # ==========================================
   # 7. Relational Database (PostgreSQL)

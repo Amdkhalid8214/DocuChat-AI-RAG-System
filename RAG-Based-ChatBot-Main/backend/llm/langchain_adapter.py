@@ -112,6 +112,7 @@ from backend.llm.prompts import (
     VERBATIM_EXTRACTION_SYSTEM_TEMPLATE,
     VERBATIM_EXTRACTION_HUMAN_TEMPLATE,
     GENERAL_SYSTEM_TEMPLATE,
+    GENERAL_SYSTEM_TEMPLATE_WITH_WEB,
     GENERAL_HUMAN_TEMPLATE_PLAIN,
     GENERAL_HUMAN_TEMPLATE_WITH_WEB,
     GROUNDING_VALIDATION_SYSTEM_TEMPLATE,
@@ -157,7 +158,7 @@ class LangChainAdapter:
         ])
 
         self.general_prompt_template_web = ChatPromptTemplate.from_messages([
-            ("system", GENERAL_SYSTEM_TEMPLATE),
+            ("system", GENERAL_SYSTEM_TEMPLATE_WITH_WEB),
             ("human", GENERAL_HUMAN_TEMPLATE_WITH_WEB),
         ])
 
@@ -188,8 +189,8 @@ class LangChainAdapter:
         temp = self.temperature if temperature is None else temperature
         num_predict = self.max_tokens if max_tokens is None else max_tokens
         client_timeout = getattr(settings, "LLM_TIMEOUT", 180.0) if timeout is None else timeout
-        num_threads = getattr(settings, "LLM_NUM_THREADS", 8)
-        num_ctx = getattr(settings, "LLM_NUM_CTX", 8192)
+        num_threads = getattr(settings, "LLM_NUM_THREADS", 2)
+        num_ctx = getattr(settings, "LLM_NUM_CTX", 2048)
 
         return ChatOllama(
             base_url=self.base_url,
@@ -199,6 +200,7 @@ class LangChainAdapter:
             timeout=client_timeout,
             num_thread=num_threads,
             num_ctx=num_ctx,
+            keep_alive="24h",
         )
 
     def chunks_to_documents(self, chunks: List[Dict[str, Any]]) -> List[Document]:
@@ -281,8 +283,8 @@ class LangChainAdapter:
         if max_char_budget is None:
             configured_budget = getattr(settings, "CONTEXT_BUDGET_TOKENS", 2048)
             ctx_tokens = getattr(settings, "LLM_NUM_CTX", 4096)
-            max_out_tokens = getattr(settings, "LLM_MAX_TOKENS", 1024)
-            available_tokens = min(configured_budget, max(1500, ctx_tokens - max_out_tokens - 800))
+            max_out_tokens = getattr(settings, "LLM_MAX_TOKENS", 512)
+            available_tokens = min(configured_budget, max(500, ctx_tokens - max_out_tokens - 400))
             max_char_budget = available_tokens * 4
 
         context_blocks: List[str] = []
@@ -720,33 +722,28 @@ class LangChainAdapter:
                     use_tools = [t for t in use_tools if getattr(t, "name", "") != "web_search"]
             else:
                 active_tools = []
-                # Check if spreadsheet context or spreadsheet analysis terms are present
                 excel_ctx = active_excel_context.get()
                 has_excel_spreadsheet = bool(excel_ctx and excel_ctx.get("has_spreadsheet")) or any(
                     str(c.get("filename", "")).lower().endswith((".xlsx", ".xls", ".csv"))
                     or "worksheet:" in str(c.get("text", "")).lower()
                     for c in chunks
                 )
-                has_excel_terms = any(
-                    k in question.lower()
-                    for k in (
-                        "excel", "sheet", "row", "column", "table", "sales", "target",
-                        "department", "highest", "lowest", "total", "average", "mean",
-                        "sum", "max", "min", "count", "group", "filter", "spreadsheet", "workbook"
+                if has_excel_spreadsheet:
+                    has_excel_calc = any(
+                        k in question.lower()
+                        for k in (
+                            "calculate", "sum", "average", "mean", "total", "max", "min",
+                            "highest", "lowest", "formula", "pivot", "aggregate"
+                        )
                     )
-                )
-                if has_excel_spreadsheet and (has_excel_terms or not any(str(c.get("filename", "")).lower().endswith(".pdf") for c in chunks)):
-                    active_tools.append(excel_analyzer_tool)
+                    if has_excel_calc:
+                        active_tools.append(excel_analyzer_tool)
 
-                has_math = any(sym in question for sym in ("*", "+", "/", "-", "%", "^", "calculate", "multiply", "divide", "compute", "total", "sum", "average"))
-                if has_math and calculator_tool not in active_tools:
+                from backend.llm.router import is_standalone_math_request, is_excel_generation_request
+                if is_standalone_math_request(question):
                     active_tools.append(calculator_tool)
-                if is_weather_request(question) and weather_tool not in active_tools:
-                    active_tools.append(weather_tool)
-                if is_excel_generation_request(question) and excel_generator_tool not in active_tools:
+                if is_excel_generation_request(question):
                     active_tools.append(excel_generator_tool)
-                if web_mode and not is_weather_request(question):
-                    active_tools.append(searxng_search_tool)
                 use_tools = active_tools if active_tools else None
 
         async def token_generator():
@@ -777,35 +774,50 @@ class LangChainAdapter:
         Weather queries prioritize the weather tool and prevent fallback to search snippets.
         """
         is_weather = is_weather_request(question)
-        if tools is None:
-            default_tools = [calculator_tool, weather_tool]
-            excel_ctx = active_excel_context.get()
-            if excel_ctx and excel_ctx.get("has_spreadsheet"):
-                has_excel_terms = any(
-                    k in question.lower()
-                    for k in (
-                        "excel", "sheet", "row", "column", "table", "sales", "target",
-                        "department", "highest", "lowest", "total", "average", "mean",
-                        "sum", "max", "min", "count", "group", "filter", "spreadsheet", "workbook"
-                    )
-                )
-                if has_excel_terms:
-                    default_tools.append(excel_analyzer_tool)
-            default_tools.append(excel_generator_tool)
-            if web_mode and not is_weather:
-                default_tools.append(searxng_search_tool)
-            tools = default_tools
+        from backend.llm.router import GREETINGS_PATTERN, is_standalone_math_request, is_excel_generation_request
+        if bool(GREETINGS_PATTERN.match(question.strip())) and (max_tokens is None or max_tokens > 60):
+            max_tokens = 60
+
+        if live_context or is_weather:
+            # Context is already pre-fetched and grounded (weather or web search).
+            # Stream tokens immediately without expensive tool-binding overhead.
+            tools = None
+            if is_weather and (max_tokens is None or max_tokens > 90):
+                max_tokens = 90
         else:
-            tools = list(tools)
-            if weather_tool not in tools:
-                tools.append(weather_tool)
-            if excel_generator_tool not in tools:
-                tools.append(excel_generator_tool)
-            excel_ctx = active_excel_context.get()
-            if excel_ctx and excel_ctx.get("has_spreadsheet") and excel_analyzer_tool not in tools:
-                tools.append(excel_analyzer_tool)
-            if not web_mode or is_weather:
-                tools = [t for t in tools if getattr(t, "name", "") != "web_search"]
+            if max_tokens is None or max_tokens > 256:
+                max_tokens = 256
+            if tools is None:
+                active_tools = []
+                if is_standalone_math_request(question):
+                    active_tools.append(calculator_tool)
+                excel_ctx = active_excel_context.get()
+                if excel_ctx and excel_ctx.get("has_spreadsheet"):
+                    has_excel_calc = any(
+                        k in question.lower()
+                        for k in (
+                            "calculate", "sum", "average", "mean", "total", "max", "min",
+                            "highest", "lowest", "formula", "pivot", "aggregate"
+                        )
+                    )
+                    if has_excel_calc:
+                        active_tools.append(excel_analyzer_tool)
+                if is_excel_generation_request(question):
+                    active_tools.append(excel_generator_tool)
+                if web_mode and not is_weather:
+                    active_tools.append(searxng_search_tool)
+                tools = active_tools if active_tools else None
+            else:
+                tools = list(tools)
+                if weather_tool not in tools and not is_weather:
+                    tools.append(weather_tool)
+                if excel_generator_tool not in tools:
+                    tools.append(excel_generator_tool)
+                excel_ctx = active_excel_context.get()
+                if excel_ctx and excel_ctx.get("has_spreadsheet") and excel_analyzer_tool not in tools:
+                    tools.append(excel_analyzer_tool)
+                if not web_mode or is_weather:
+                    tools = [t for t in tools if getattr(t, "name", "") != "web_search"]
 
         messages = self.build_general_messages(question, live_context=live_context, history=history)
         async for token in self.stream_chat_with_tools(

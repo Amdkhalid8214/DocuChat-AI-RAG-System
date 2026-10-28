@@ -23,6 +23,7 @@ from backend.api import (
     auth_router,
     websockets_router,
     tools_router,
+    pdf_tools_router,
     seed_default_users
 )
 
@@ -46,6 +47,55 @@ async def lifespan(app: FastAPI):
     if recovery_stats["recovered_jobs"] > 0 or recovery_stats["recovered_docs"] > 0:
         logger.info(f"Recovered zombie jobs: {recovery_stats}")
     logger.info("DocuChat backend started successfully.")
+    # Warmup embedder and reranker models in background thread so first document queries are fast
+    import threading
+    from backend.embeddings.embedder import embedder
+    from backend.retrieval.reranker import reranker
+    def _warmup_models():
+        try:
+            logger.info("Pre-warming embedding & reranker models...")
+            embedder._get_st_model()
+            reranker._get_model()
+            logger.info("Embedding & reranker models warmed up.")
+
+            # Automatically ensure all indexed BM25 documents have dense vectors in Qdrant
+            from backend.retrieval.bm25 import bm25_index
+            from backend.chunking.structure_chunker import Chunk
+            from qdrant_client.http import models as qmodels
+            for doc_id, cached in bm25_index._cache.items():
+                if not cached.get("chunks"):
+                    continue
+                try:
+                    res = vector_store.client.count(
+                        collection_name=vector_store.collection_name,
+                        count_filter=qmodels.Filter(
+                            must=[qmodels.FieldCondition(key="doc_id", match=qmodels.MatchValue(value=doc_id))]
+                        )
+                    )
+                    if res.count == 0:
+                        logger.info(f"Auto-syncing {len(cached['chunks'])} chunks to vector store for document {doc_id}...")
+                        chunk_objs = [
+                            Chunk(
+                                chunk_id=c["chunk_id"],
+                                doc_id=c.get("doc_id", doc_id),
+                                text=c["text"],
+                                page=c.get("page", 1),
+                                bboxes=c.get("bboxes", []),
+                                heading_path=c.get("heading_path", []),
+                                token_count=c.get("token_count", 0),
+                                metadata=c.get("metadata", {})
+                            )
+                            for c in cached["chunks"]
+                        ]
+                        texts = [c.text for c in chunk_objs]
+                        vectors = embedder.embed_texts(texts)
+                        vector_store.upsert_chunks(chunk_objs, vectors)
+                        logger.info(f"Auto-synced document {doc_id} to vector store ({len(vectors)} vectors).")
+                except Exception as sync_err:
+                    logger.warning(f"Vector store auto-sync warning for doc {doc_id}: {sync_err}")
+        except Exception as warm_err:
+            logger.warning(f"Model warmup warning: {warm_err}")
+    threading.Thread(target=_warmup_models, daemon=True).start()
     yield
     logger.info("Shutting down DocuChat backend.")
 
@@ -118,6 +168,7 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(tools_router, prefix="/api")
+app.include_router(pdf_tools_router, prefix="/api")
 
 # Mount Routers directly for backward compatibility
 app.include_router(auth_router)
@@ -125,6 +176,7 @@ app.include_router(documents_router)
 app.include_router(conversations_router)
 app.include_router(chat_router)
 app.include_router(tools_router)
+app.include_router(pdf_tools_router)
 
 # Mount WebSockets (root path)
 app.include_router(websockets_router)
@@ -155,5 +207,11 @@ async def readiness_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    uvicorn.run(
+        "backend.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=True,
+        reload_excludes=["*.db*", "*.db-journal", "*.db-wal", "*.db-shm", "*data/*", "*data\\*", "*__pycache__/*", "*.log"]
+    )
 

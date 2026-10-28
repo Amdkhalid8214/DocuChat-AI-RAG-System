@@ -90,6 +90,22 @@ export default function ExcelArtifactCard({ artifact }) {
             Excel workbook · {sheetCount} {sheetCount === 1 ? "sheet" : "sheets"} · {casesOrRows} {countLabel}
             {colCount ? ` · ${colCount} columns` : ""}
           </div>
+          {art.sheet_names && art.sheet_names.length > 1 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", margin: "4px 0" }}>
+              {art.sheet_names.map((s, idx) => (
+                <span key={idx} style={{
+                  fontSize: "11px",
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  background: "#e2e8f0",
+                  color: "#334155",
+                  fontWeight: 500
+                }}>
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
           <div>
             <span className="excel-validated-badge">{validationStatus}</span>
           </div>

@@ -24,11 +24,12 @@ class OllamaClient:
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": "24h",
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens,
                 "num_gpu": 99,
-                "num_thread": getattr(settings, "LLM_NUM_THREADS", 8),
+                "num_thread": getattr(settings, "LLM_NUM_THREADS", 2),
                 "num_ctx": getattr(settings, "LLM_NUM_CTX", 2048),
             }
         }
@@ -58,11 +59,12 @@ class OllamaClient:
             "model": self.model,
             "prompt": prompt,
             "stream": True,
+            "keep_alive": "24h",
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens,
                 "num_gpu": 99,
-                "num_thread": getattr(settings, "LLM_NUM_THREADS", 8),
+                "num_thread": getattr(settings, "LLM_NUM_THREADS", 2),
                 "num_ctx": getattr(settings, "LLM_NUM_CTX", 2048),
             }
         }
