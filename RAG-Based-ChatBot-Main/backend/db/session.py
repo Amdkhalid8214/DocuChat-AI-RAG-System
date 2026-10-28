@@ -66,6 +66,12 @@ async def init_db():
                 if "excel_artifact" not in columns:
                     logger.info("Auto-migrating: adding excel_artifact to messages")
                     sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN excel_artifact JSON")
+                if "document_artifact" not in columns:
+                    logger.info("Auto-migrating: adding document_artifact to messages")
+                    sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN document_artifact JSON")
+                if "pdf_artifact" not in columns:
+                    logger.info("Auto-migrating: adding pdf_artifact to messages")
+                    sync_conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN pdf_artifact JSON")
 
         await conn.run_sync(_migrate_columns)
 
